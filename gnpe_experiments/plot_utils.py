@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -40,7 +41,11 @@ def pairplot_dictionary(
     """
     if max(arr.ndim for arr in data.values()) > 2:
         raise ValueError("Arrays must be at most 2 dimensional.")
-    data_2d = {k: arr[:limit] for k, arr in data.items() if arr.ndim == 2}
+    data_2d = {
+        k: np.random.permutation(arr)[:limit]
+        for k, arr in data.items()
+        if arr.ndim == 2
+    }
     smallest = min(arr.shape[0] for arr in data_2d.values())
     dfs = []
 
@@ -80,7 +85,7 @@ def pairplot_dictionary(
     pairplot = sns.pairplot(
         df,
         hue="source",
-        plot_kws={"s": sizes},
+        plot_kws={"sizes": np.array(sizes, dtype=float)},
         diag_kws={"common_norm": False},
         corner=True,
         hue_order=data.keys(),
@@ -88,7 +93,7 @@ def pairplot_dictionary(
 
     for i, (k, arr) in enumerate(data_1d.items()):
         label_index = np.argwhere([k == data_key for data_key in data.keys()]).item()
-        color = pairplot.legend.legendHandles[label_index].get_facecolor()
+        color = pairplot.legend.legendHandles[label_index].get_color()
         for i, ax in enumerate(np.diag(pairplot.axes)):
             y_lim = ax.get_ylim()
             ax.axvline(x=arr[i], color=color, ymin=0, ymax=y_lim[1])
@@ -106,3 +111,22 @@ def _filter_outliers(data, n):
     upper_bound = q3 + n * iqr
     mask = jnp.logical_and(data >= lower_bound, data <= upper_bound).all(axis=1)
     return data[mask]
+
+
+def plot_contrastive_aux(aux, filter_quantile=0.999):
+    aux_stacked = {}
+    for k in aux[0].keys():
+        aux_stacked[k] = jnp.stack([a[k] for a in aux])
+
+    def filter_(arr, percentile):
+        upper = jnp.quantile(arr, percentile)
+        lower = jnp.quantile(arr, 1 - percentile)
+        arr = arr.at[arr > upper].set(jnp.nan)
+        return arr.at[arr < lower].set(jnp.nan)
+
+    fig, axes = plt.subplots(nrows=len(aux_stacked))
+    for (name, val), ax in zip(aux_stacked.items(), axes, strict=True):
+        ax.plot(filter_(val, filter_quantile))
+        ax.set_title(name)
+    fig.tight_layout()
+    plt.show()

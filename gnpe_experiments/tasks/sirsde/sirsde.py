@@ -9,6 +9,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import matplotlib.pyplot as plt
 import optax
 from diffrax import (
     ControlTerm,
@@ -39,21 +40,20 @@ def get_surrogate_path():
     return Path(__file__).parent / "surrogate"
 
 
-def get_sir_surrogate():
+def get_surrogate():
     """Get the surrogate likelihood."""
     like = get_sir_surrogate_untrained()
     return eqx.tree_deserialise_leaves(f"{get_surrogate_path()}/surrogate.eqx", like)
 
 
-def get_sir_processors():
+def get_processors():
     """The reparameterization used when fitting the surrogate."""
     sirsde = SIRSDE()
-    n = 2
-    x = jnp.empty((n, sirsde.x_dim))
-    z = jnp.empty((n, sirsde.z_dim))
+    z, x = (jr.uniform(jr.PRNGKey(0), (2, dim)) for dim in [sirsde.z_dim, sirsde.x_dim])
     like = sirsde.infer_processors(z, x)
     return eqx.tree_deserialise_leaves(
-        f"{get_surrogate_path()}/processor.eqx", like=like
+        f"{get_surrogate_path()}/processor.eqx",
+        like=like,
     )
 
 
@@ -64,8 +64,8 @@ def get_hierarchical_sir_model(n_obs: int):
     But we can use the inverse of the transformations returned by get_sir_processors to
     return to the interpretable scales.
     """
-    processors = get_sir_processors()
-    surrogate = get_sir_surrogate()
+    processors = get_processors()
+    surrogate = get_surrogate()
     hyperparams = get_sir_model_hyperparams()
 
     # As the surrogate is trained on a transformed space, we must respect that here
@@ -290,10 +290,10 @@ def get_sir_surrogate_untrained():
     )
 
 
-def main(key, n_sim: int):
-    """Run the SIR model parameters of the surrogate and the inferred processor."""
+def main(key, n_sim: int, *, plot_losses: bool = True):
+    """Run the SIR model, fit and save the surrogate and the inferred processor."""
     hyperparams = get_sir_model_hyperparams()
-    sirsde = SIRSDE(steps=50)
+    sirsde = SIRSDE()
     model = LocScaleHierarchicalModel(
         **hyperparams,
         likelihood=sirsde.to_distribution(),
@@ -319,18 +319,10 @@ def main(key, n_sim: int):
 
     # Learn likelihood on reparameterized space
     key, subkey = jr.split(key)
-
-    surrogate_simulator = masked_autoregressive_flow(
-        subkey,
-        base_dist=Normal(jnp.zeros((sirsde.x_dim,))),
-        cond_dim=sirsde.z_dim,
-        invert=False,  # Slower here, but faster sampling later
-    )
-
-    key, subkey = jr.split(key)
+    surrogate_simulator = get_sir_surrogate_untrained()
 
     optimizer = optax.apply_if_finite(optax.adam(1e-4), 10)
-
+    key, subkey = jr.split(key)
     surrogate_simulator, losses = fit_to_data(
         key=subkey,
         dist=surrogate_simulator,
@@ -341,12 +333,21 @@ def main(key, n_sim: int):
         max_patience=10,
     )
     eqx.tree_serialise_leaves(
-        f"{get_surrogate_path()}/surrogate.eqx", surrogate_simulator
+        f"{get_surrogate_path()}/surrogate.eqx",
+        surrogate_simulator,
     )
     eqx.tree_serialise_leaves(f"{get_surrogate_path()}/processor.eqx", processors)
     jnp.savez(f"{get_surrogate_path()}/losses.npz", **losses)
 
+    if plot_losses:
+        for k, v in losses.items():
+            plt.plot(v, label=k)
+        plt.legend()
+        plt.show()
+
 
 if __name__ == "__main__":
-    # Run from project root e.g. with: python -m gnpe_experiments.sirsde.sirsde
-    main(key=jr.PRNGKey(0), n_sim=5000)
+    # TODO move to scripts folder
+    # Run from project root e.g. with: python -m gnpe_experiments.tasks.sirsde.sirsde
+
+    main(key=jr.PRNGKey(0), n_sim=5000, plot_losses=True)
