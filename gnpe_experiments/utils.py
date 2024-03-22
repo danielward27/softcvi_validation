@@ -1,13 +1,12 @@
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 
 import equinox as eqx
 import jax.numpy as jnp
-import jax.random as jr
 from flowjax.distributions import AbstractDistribution
 from jax import Array
 from jax.flatten_util import ravel_pytree
-from jax.tree_util import tree_map, tree_structure, tree_unflatten
 
 
 def drop_nan_and_warn(*arrays, axis: int):
@@ -77,21 +76,5 @@ class MLPParameterizedDistribution(AbstractDistribution):
         return dist.log_prob(x)
 
 
-def init_to_small(pytree, key, scale: float = 0.0001):
-    params, static = eqx.partition(pytree, eqx.is_inexact_array)
-
-    def random_split_like_tree(key, target):
-        treedef = tree_structure(target)
-        keys = jr.split(key, treedef.num_leaves)
-        return tree_unflatten(treedef, keys)
-
-    def tree_random_normal_like(key, target):
-        keys_tree = random_split_like_tree(key, target)
-        return tree_map(
-            lambda leaf, key: scale * jr.normal(key, leaf.shape),
-            target,
-            keys_tree,
-        )
-
-    params = tree_random_normal_like(key, params)
-    return eqx.combine(params, static)
+def get_abspath_project_root():
+    return Path(__file__).parent.parent
