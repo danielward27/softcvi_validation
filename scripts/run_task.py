@@ -1,4 +1,5 @@
 # %%
+import argparse
 import json
 import os
 from functools import partial
@@ -22,14 +23,9 @@ from gnpe_experiments.utils import get_abspath_project_root
 
 os.chdir(get_abspath_project_root())
 
-N_OBS = 50
-N_CONTRASTIVE = 20
-MAXIMUM_LIKELIHOOD_STEPS = 5000
-CONTRASTIVE_STEPS = 1000
-
 
 def get_sirsde_model_and_guide(key):
-    model = get_hierarchical_sir_model(n_obs=N_OBS)
+    model = get_hierarchical_sir_model(n_obs=50)
 
     guide = LocScaleHierarchicalGuide(
         key=key,
@@ -49,8 +45,8 @@ def main(
     task_name: str,
     maximum_likelihood_steps: int,
     contrastive_steps: int,
+    num_contrastive: int,
 ):
-
     key, subkey = jr.split(jr.PRNGKey(seed))
     model, guide = TASKS[task_name](subkey)
     posteriors = {}
@@ -92,7 +88,7 @@ def main(
             model=model,
             obs=observations["x"],
             obs_name="x",
-            n_contrastive=N_CONTRASTIVE,
+            n_contrastive=num_contrastive,
             stop_grad_for_contrastive_sampling=stop_grad,
         )
 
@@ -132,17 +128,26 @@ def main(
         observed_nodes=["x"],
     ).item()
 
-    file_path = f"results/{task_name}/{seed}.json"
+    file_path = f"{os.getcwd()}/results/{task_name}/{seed}.json"
 
     with open(file_path, "w") as json_file:
         json.dump(results, json_file)
 
 
 if __name__ == "__main__":
-    seed = os.environ.get("SLURM_ARRAY_JOB_ID", 0)  # Default 0 for running locally
+    # python
+    parser = argparse.ArgumentParser(description="NPE")
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--task-name", type=str)
+    parser.add_argument("--maximum-likelihood-steps", type=int, default=2000)
+    parser.add_argument("--contrastive-steps", type=int, default=2000)
+    parser.add_argument("--num-contrastive", type=int, default=20)
+    args = parser.parse_args()
+
     main(
-        seed=seed,
-        task_name="sirsde",
-        maximum_likelihood_steps=MAXIMUM_LIKELIHOOD_STEPS,
-        contrastive_steps=CONTRASTIVE_STEPS,
+        seed=args.seed,
+        task_name=args.task_name,
+        maximum_likelihood_steps=args.maximum_likelihood_steps,
+        contrastive_steps=args.contrastive_steps,
+        num_contrastive=args.num_contrastive,
     )

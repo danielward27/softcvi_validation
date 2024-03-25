@@ -1,11 +1,12 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
-dependencies = ["flowjax", "equinox", "tqdm", "optax"]
+dependencies = ["flowjax", "equinox", "tqdm", "optax", "matplotlib", "diffrax"]
 description = "Experiments for gnpe package."
 name = "gnpe_experiments"
 readme = "README.md"
 requires-python = ">=3.10"
 version = "0.0.0"
+
 
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
