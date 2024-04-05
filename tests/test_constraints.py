@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import pytest
 from jax import vmap
 
-from gnpe_experiments.constraints import Interval
+from cnpe_validation.constraints import Interval
 
 
 def test_interval():

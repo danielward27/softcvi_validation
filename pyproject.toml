@@ -1,8 +1,8 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
 dependencies = ["flowjax", "equinox", "tqdm", "optax", "matplotlib", "diffrax"]
-description = "Experiments for gnpe package."
-name = "gnpe_experiments"
+description = "Experiments for cnpe package."
+name = "cnpe_validation"
 readme = "README.md"
 requires-python = ">=3.10"
 version = "0.0.0"
@@ -29,4 +29,4 @@ convention = "google"
 "__init__.py" = ["D"]
 
 [tool.setuptools]
-packages = ["gnpe_experiments"]
+packages = ["cnpe_validation"]
