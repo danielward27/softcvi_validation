@@ -1,5 +1,6 @@
+from collections.abc import Sequence
+
 import jax.random as jr
-from cnpe.numpyro_utils import log_density
 from jax import vmap
 from numpyro import handlers
 from numpyro.infer import Predictive, log_likelihood
@@ -16,10 +17,6 @@ def sample_posterior(key, guide, obs, n: int, model=None):
     return posterior_samps
 
 
-def posterior_probability_true(guide, true_latents, obs):
-    return log_density(guide, data=true_latents, obs=obs)
-
-
 def log_likelihood_obs(key, guide, model, obs, n: int):
     """Sample the posterior and compute the average likelihood of obs."""
     posterior_samps = sample_posterior(key, guide, obs, n)
@@ -32,7 +29,14 @@ def log_likelihood_obs(key, guide, model, obs, n: int):
     return list(log_lik.values())[0].mean()
 
 
-def log_likelihood_held_out(key, model, guide, true_latents, n: int, obs_name: str):
+def log_likelihood_held_out(
+    key,
+    model,
+    guide,
+    true_latents,
+    n: int,
+    obs_names: Sequence[str],
+):
     """Note that the true latents provided should be the subset that are global."""
 
     def held_out_log_likeliood_single(key):
@@ -41,7 +45,8 @@ def log_likelihood_held_out(key, model, guide, true_latents, n: int, obs_name: s
         held_out_obs = handlers.trace(
             handlers.substitute(handlers.seed(model, obs_key)),
             true_latents,
-        )[obs_name]
+        )
+        held_out_obs = {k: held_out_obs[k] for k in obs_names}
 
         return log_likelihood_obs(posterior_key, guide, model, held_out_obs, 1)
 

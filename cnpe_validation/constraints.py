@@ -41,7 +41,7 @@ class Interval(AbstractConstraint):
 
     bijection: Chain
 
-    def __init__(self, low: float, high: float):
+    def __init__(self, low: float | int, high: float | int):
         loc = -(low + high) / 2
         scale = 2 / (high - low)
         aff = Affine(loc * scale, scale)

@@ -14,11 +14,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "--jaxtyping-packages=cnpe_validation,jax,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
+
 
 [tool.ruff]
 select = ["E", "F", "B", "D", "COM", "I", "UP", "TRY004", "RET", "PT", "FBT"]
 include = ["*.py", "*.pyi", "**/pyproject.toml", "*.ipynb"]
-ignore = ["D102", "D105", "D107"]
+ignore = ["D102", "D105", "D107", "F722"]
 
 [tool.ruff.pydocstyle]
 convention = "google"
