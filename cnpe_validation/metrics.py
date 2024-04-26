@@ -35,18 +35,18 @@ def log_likelihood_held_out(
     guide,
     true_latents,
     n: int,
-    obs_names: Sequence[str],
+    observed_names: Sequence[str],
 ):
     """Note that the true latents provided should be the subset that are global."""
 
     def held_out_log_likeliood_single(key):
         # Sample 1 dataset, and 1 posterior sample and compute log likelihood
-        obs_key, posterior_key = jr.split(key)
+        observed_key, posterior_key = jr.split(key)
         held_out_obs = handlers.trace(
-            handlers.substitute(handlers.seed(model, obs_key)),
+            handlers.substitute(handlers.seed(model, observed_key)),
             true_latents,
         )
-        held_out_obs = {k: held_out_obs[k] for k in obs_names}
+        held_out_obs = {k: held_out_obs[k] for k in observed_names}
 
         return log_likelihood_obs(posterior_key, guide, model, held_out_obs, 1)
 

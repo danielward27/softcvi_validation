@@ -1,15 +1,18 @@
 import json
 import zipfile
 from abc import abstractmethod
+from functools import partial
 from io import BytesIO
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
-import jax.random as jr
 import requests
 from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
-from cnpe.numpyro_utils import get_sample_site_names, shape_only_trace
+from cnpe.numpyro_utils import (
+    get_sample_site_names,
+    shape_only_trace,
+    validate_data_and_model_match,
+)
 from jaxtyping import Array, PRNGKeyArray
 from numpyro.infer import Predictive
 from numpyro.util import check_model_guide_match
@@ -24,7 +27,7 @@ class AbstractTask(eqx.Module):
     def __check_init__(self):
         model_trace = shape_only_trace(self.model)
         obs = {}
-        for name in self.model.obs_names:
+        for name in self.model.observed_names:
             if name not in model_trace:
                 raise ValueError(
                     f"Trace of model does not include observed node {name}.",
@@ -39,47 +42,42 @@ class AbstractTask(eqx.Module):
             guide_trace=shape_only_trace(self.guide, obs=obs),
         )
 
-    def get_obs_and_latents_and_check_keys(self, key: PRNGKeyArray):
-        """get_obs_and_latents and checks matches model trace and model.obs_names."""
-        names = get_sample_site_names(  # TODO Inconsistent with get_obs_and_latents
-            self.model.call_without_reparam,
+    def get_observed_and_latents_and_check(self, key: PRNGKeyArray):
+        """get_observed_and_latents and checks matches model trace and model.observed_names."""
+        obs, latents = self.get_observed_and_latents(key)
+
+        # These should be methods defined on abstract class?
+        validate_data_fn = partial(
+            validate_data_and_model_match,
+            model=self.model.call_without_reparam,
         )
 
-        # Not sure of implications so probably safest to error for now
-        assert len(names["observed"]) == 0  # assume all obs passed as argument
-        latent_names = [n for n in names["latent"] if n not in self.model.obs_names]
-
-        obs, latents = self.get_obs_and_latents(key)
-
-        if (mod_k := sorted(self.model.obs_names)) != (data_k := sorted(obs.keys())):
-            raise ValueError(f"Model implied obs keys {mod_k}, got {data_k}")
-
-        if latent_names != (data_k := sorted(latents.keys())):
-            raise ValueError(f"Model implied latent keys {mod_k}, got {data_k}")
-
-        model_trace = shape_only_trace(
-            self.model.call_without_reparam,
-        )  # Assume compatibility with guide checked elsewhere
-
-        for data in (obs, latents):
-            for name, arr in data.items():
-                # TODO stricter check here?
-                try:
-                    trace_shape = model_trace[name]["value"].shape
-                    jnp.broadcast_shapes(arr.shape, trace_shape)
-                    print(f"Data {name}: {arr.shape}")
-                    print(f"Trace {name}: {trace_shape}")
-                except ValueError as e:
-                    e.add_note(
-                        f"{name} had shape {arr.shape} in data and {trace_shape} in "
-                        "model trace which were incompatible.",
-                    )
-                    raise e
+        if isinstance(self, AbstractTaskWithReference):
+            validate_data_fn(obs)
+            eqx.filter_vmap(validate_data_fn)(latents)  # Batch of reference samples
+        else:
+            validate_data_fn(obs | latents)
 
         return obs, latents
 
+    def _check_data_names(self, obs: dict[str, Array], latents: dict[str, Array]):
+        latent_names = (
+            get_sample_site_names(self.model.call_without_reparam).all
+            - self.model.observed_names
+        )
+
+        if obs.keys() != self.model.observed_names:
+            raise ValueError(
+                f"Obsersvations had keys {obs.keys()}, but model had "
+                f"{self.model.observed_names}",
+            )
+        if latents.keys() != latent_names:
+            raise ValueError(
+                f"Latents had keys {latents.keys()}, but model had {latent_names}.",
+            )
+
     @abstractmethod
-    def get_obs_and_latents(
+    def get_observed_and_latents(
         self,
         key: PRNGKeyArray,
     ) -> tuple[dict[str, Array], dict[str, Array]]:
@@ -90,7 +88,12 @@ class AbstractTask(eqx.Module):
         """
 
     @abstractmethod
-    def check_obs_and_latents_match_model(self):
+    def validate_data(self, obs: dict[str, Array], latents: dict[str, Array]):
+        """Checks the data produced by get_observed_and_latents is what is expected.
+
+        Specifically, checks the shapes and names are correct, and that a batch
+        dimension in the latents is present for tasks with a reference posterior.
+        """
         pass
 
 
@@ -100,19 +103,29 @@ class AbstractTaskWithoutReference(AbstractTask):
     The observation and parameters are generated by sampling the model.
     """
 
-    def get_obs_and_latents(self, key):
+    def get_observed_and_latents(self, key):
         """Generate an observation and ground truth latents from the model."""
-        # TODO Ensure always on original space?
-        pred = Predictive(self.model, num_samples=1)
-        key, subkey = jr.split(key)
-        latents = pred(subkey)
+        latents = Predictive(self.model.call_without_reparam, num_samples=1)(key)
         latents = {k: v.squeeze(0) for k, v in latents.items()}
-        obs = {name: latents.pop(name) for name in self.model.obs_names}
+        obs = {name: latents.pop(name) for name in self.model.observed_names}
         return obs, latents
+
+    def validate_data(self, obs: dict[str, Array], latents: dict[str, Array]):
+        self._check_data_names(obs, latents)
+        validate_data_and_model_match(obs | latents, self.model.call_without_reparam)
 
 
 class AbstractTaskWithReference(AbstractTask):
     """A task with a corresponding reference posterior."""
+
+    def validate_data(self, obs: dict[str, Array], latents: dict[str, Array]):
+        """Checks that there exists a single batch dimension in latents."""
+        self._check_data_names(obs, latents)
+        validation_fn = partial(validate_data_and_model_match)(
+            model=self.model.call_without_reparam,
+        )
+        validation_fn(obs)
+        eqx.filter_vmap(validation_fn)(latents)
 
 
 def get_posterior_db_reference_posterior(name) -> dict:

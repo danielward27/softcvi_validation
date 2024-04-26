@@ -214,7 +214,7 @@ class SIRSDETask(AbstractTaskWithoutReference):
 
     model: Callable
     guide: Callable
-    obs_names: ("x",)
+    observed_names: {"x"}
 
     def __init__(self, key: Array, n_obs: int = 50):
         self.model = SIRSDEModel(n_obs=n_obs, use_surrogate=True)

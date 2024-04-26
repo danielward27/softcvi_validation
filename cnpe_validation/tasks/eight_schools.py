@@ -3,7 +3,6 @@ from typing import ClassVar
 import jax.numpy as jnp
 import jax.random as jr
 from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
-from cnpe.numpyro_utils import get_sample_site_names
 from flowjax.bijections import Scale
 from flowjax.distributions import (
     AbstractDistribution,
@@ -50,13 +49,11 @@ class HalfNormal(AbstractTransformed):
         self.bijection = Scale(scale)
 
 
-# TODO seperation of observation and other data seems a little strange, but perhaps
-# logical since we simulate obs too.
 class EightSchoolsModel(AbstractNumpyroModel):
     """Eight schools model. We reparamerterize (non-centering)."""
 
-    obs_names = ("y",)
-    reparam_names = ("mu", "theta")
+    observed_names = {"y"}
+    reparam_names = {"mu", "theta"}
     num_schools: ClassVar[int] = 8
     sigma: ClassVar[Array] = jnp.array([15, 10, 16, 11, 9, 11, 10, 18])
 
@@ -127,7 +124,7 @@ class EightSchoolsTask(AbstractTaskWithReference):
     def __init__(self, key: PRNGKeyArray):
         self.guide = EightSchoolsGuide(key, width_size=20)
 
-    def get_obs_and_latents(
+    def get_observed_and_latents(
         self,
         key: PRNGKeyArray | None = None,
     ) -> tuple[dict[str, Array], dict[str, Array]]:

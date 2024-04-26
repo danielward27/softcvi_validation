@@ -5,16 +5,19 @@ from functools import partial
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
+import jaxtyping
 import matplotlib.pyplot as plt
 import optax
-from cnpe.losses import AmortizedMaximumLikelihood, ContrastiveLoss
-from cnpe.numpyro_utils import prior_log_density
-from cnpe.train import train
 
-from cnpe_validation.tasks.eight_schools import EightSchoolsTask
-from cnpe_validation.tasks.sirsde import SIRSDETask
-from cnpe_validation.tasks.tasks import AbstractTaskWithReference
-from cnpe_validation.utils import get_abspath_project_root
+with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
+    from cnpe.losses import AmortizedMaximumLikelihood, ContrastiveLoss
+    from cnpe.numpyro_utils import prior_log_density
+    from cnpe.train import train
+
+    from cnpe_validation.tasks.eight_schools import EightSchoolsTask
+    from cnpe_validation.tasks.sirsde import SIRSDETask
+    from cnpe_validation.tasks.tasks import AbstractTaskWithReference
+    from cnpe_validation.utils import get_abspath_project_root
 
 os.chdir(get_abspath_project_root())
 
@@ -38,7 +41,7 @@ def main(
     task = TASKS[task_name](subkey)
 
     key, subkey = jr.split(key)
-    obs, true_latents = task.get_obs_and_latents_and_check_keys(subkey)
+    obs, true_latents = task.get_observed_and_latents_and_check(subkey)
 
     posteriors = {}
 
@@ -107,18 +110,18 @@ def main(
                 latents=true_latents,
                 model=task.model,
                 obs=obs,
-            )[0].item()
+            )
             for k, posterior in posteriors.items()
         }
 
         results[r"$p(\theta^*)$"] = prior_log_density(
-            partial(task.model, obs=obs),
+            partial(task.model.call_without_reparam, obs=obs),
             data=true_latents,
-            observed_nodes=task.obs_names,
+            observed_nodes=task.model.observed_names,
         )
         return results
 
-    if isinstance(task, AbstractTaskWithReference):  # Batch of samples
+    if isinstance(task, AbstractTaskWithReference):  # Batch of "true" samples
         compute_true_latent_prob = eqx.filter_vmap(compute_true_latent_prob)
 
     results = compute_true_latent_prob(true_latents)
@@ -132,7 +135,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
     parser.add_argument(
-        "--maximum-likelihood-steps", type=int, default=5
+        "--maximum-likelihood-steps",
+        type=int,
+        default=5,
     )  # TODO revert
     parser.add_argument("--contrastive-steps", type=int, default=5)
     parser.add_argument("--num-contrastive", type=int, default=5)
