@@ -128,6 +128,7 @@ class AbstractTaskWithReference(AbstractTask):
         eqx.filter_vmap(validation_fn)(latents)
 
 
+# TODO Consider using associated python package
 def get_posterior_db_reference_posterior(name) -> dict:
     """Get the reference posterior draws from posteriordb.
 

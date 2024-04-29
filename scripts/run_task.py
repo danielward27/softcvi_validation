@@ -17,6 +17,7 @@ with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.bearty
     from cnpe_validation.tasks.eight_schools import EightSchoolsTask
     from cnpe_validation.tasks.sirsde import SIRSDETask
     from cnpe_validation.tasks.tasks import AbstractTaskWithReference
+    from cnpe_validation.tasks.two_moons import TwoMoonsTask
     from cnpe_validation.utils import get_abspath_project_root
 
 os.chdir(get_abspath_project_root())
@@ -24,6 +25,7 @@ os.chdir(get_abspath_project_root())
 TASKS = {
     "sirsde": SIRSDETask,
     "eight_schools": EightSchoolsTask,
+    "two_moons": TwoMoonsTask,
 }
 
 
@@ -134,13 +136,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="NPE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument(
-        "--maximum-likelihood-steps",
-        type=int,
-        default=5,
-    )  # TODO revert
-    parser.add_argument("--contrastive-steps", type=int, default=5)
-    parser.add_argument("--num-contrastive", type=int, default=5)
+    parser.add_argument("--maximum-likelihood-steps", type=int, default=2000)
+    parser.add_argument("--contrastive-steps", type=int, default=2000)
+    parser.add_argument("--num-contrastive", type=int, default=2000)
     parser.add_argument("--plot-losses", action="store_true")
     args = parser.parse_args()
 

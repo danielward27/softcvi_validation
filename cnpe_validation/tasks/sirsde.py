@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import numpyro
+from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
 from diffrax import (
     ControlTerm,
     MultiTerm,
@@ -212,9 +213,9 @@ class SIRSDEGuide(eqx.Module):
 class SIRSDETask(AbstractTaskWithoutReference):
     """Task, using surrogate simulator."""
 
-    model: Callable
-    guide: Callable
-    observed_names: {"x"}
+    model: AbstractNumpyroModel
+    guide: AbstractNumpyroGuide
+    observed_names = {"x"}
 
     def __init__(self, key: Array, n_obs: int = 50):
         self.model = SIRSDEModel(n_obs=n_obs, use_surrogate=True)

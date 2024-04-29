@@ -4,10 +4,16 @@ from pathlib import Path
 
 import equinox as eqx
 import jax.numpy as jnp
-from flowjax.distributions import AbstractDistribution
+from flowjax.bijections import Chain, Loc, Scale, Tanh
+from flowjax.distributions import (
+    AbstractDistribution,
+    AbstractTransformed,
+    Logistic,
+)
 from flowjax.wrappers import NonTrainable, unwrap
 from jax import Array, vmap
 from jax.flatten_util import ravel_pytree
+from jaxtyping import ArrayLike
 
 
 def drop_nan_and_warn(*arrays):
@@ -22,6 +28,27 @@ def drop_nan_and_warn(*arrays):
         )
         arrays = [jnp.compress(is_finite, a, 0) for a in arrays]
     return arrays
+
+
+class UniformWithLogisticBase(AbstractTransformed):
+    """A uniform distribution parameterized as a transformed logistic distribution.
+
+    We use this in models so we can use TransformReparam, such that the variational
+    distribution can be learned on the unbounded (standard logistically distributed)
+    space.
+    """
+
+    bijection: Chain
+    base_dist: Logistic
+
+    def __init__(self, minval: ArrayLike = 0, maxval: ArrayLike = 1):
+        minval, maxval = jnp.broadcast_arrays(minval, maxval)
+        shape = minval.shape
+
+        # Tanh maps logistic(scale=0.5) to uniform on [-1, 1]
+        self.base_dist = Logistic(scale=jnp.full(shape, 0.5))
+        scale = (maxval - minval) / 2
+        self.bijection = Chain([Tanh(shape), Scale(scale), Loc(minval + scale)])
 
 
 class MLPParameterizedDistribution(AbstractDistribution):
@@ -93,6 +120,3 @@ class MLPParameterizedDistribution(AbstractDistribution):
 
 def get_abspath_project_root():
     return Path(__file__).parent.parent
-
-
-# %%
