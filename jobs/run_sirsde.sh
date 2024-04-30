@@ -10,5 +10,5 @@
 
 # Example submission: sbatch jobs/run_sirsde.sh
 module load lang/python/miniconda/3.9.7
-source activate flowjax_env
+source activate flowjax_env # TODO rename
 python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name="sirsde"

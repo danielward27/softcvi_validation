@@ -30,7 +30,6 @@ from flowjax.distributions import (
 from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from jax import Array
-from numpyro.infer.reparam import TransformReparam
 
 from cnpe_validation import constraints
 from cnpe_validation.tasks.tasks import AbstractTaskWithoutReference
@@ -90,7 +89,7 @@ def get_processors():
     )
 
 
-class SIRSDEModel(eqx.Module):
+class SIRSDEModel(AbstractNumpyroModel):
     """Hierarchical SIR model, with a hyperprior on the location and scale of p(z).
 
     Uses a surrogate simulator (by default).
@@ -106,7 +105,8 @@ class SIRSDEModel(eqx.Module):
     z: Callable
     likelihood: AbstractDistribution
     n_obs: int
-    reparam: dict
+    reparam_names = {"loc", "scale", "z"}
+    observed_names = {"x"}
 
     def __init__(self, n_obs: int, *, use_surrogate: bool = True):
         if use_surrogate:
@@ -124,39 +124,30 @@ class SIRSDEModel(eqx.Module):
         self.loc = Normal(jnp.full(self.likelihood.cond_shape, -2))
         self.scale = LogNormal(-1, scale=jnp.full(self.likelihood.cond_shape, 0.3))
         self.n_obs = n_obs
-        self.reparam = {
-            "loc": TransformReparam(),
-            "scale": TransformReparam(),
-            "z": TransformReparam(),
-        }
 
-    def __call__(self, obs: Array | None = None):
+    def call_without_reparam(self, obs: dict[str, Array] | None = None):
         """The numpyro model.
 
         Args:
             obs: The observations. Defaults to None.
         """
-        if obs is not None and obs.shape[0] != self.n_obs:
-            raise ValueError(f"Expected obs.shape[0]=={self.n_obs}, got {obs.shape[0]}")
+        obs = obs["x"] if obs is not None else None
 
-        with numpyro.handlers.reparam(config=self.reparam):
-            loc = sample("loc", self.loc)
-            scale = sample("scale", self.scale)
-            prior = self.z(loc, scale)
+        loc = sample("loc", self.loc)
+        scale = sample("scale", self.scale)
+        prior = self.z(loc, scale)
 
-            with numpyro.plate("obs", self.n_obs):
-                z = sample("z", prior)
-                sample("x", self.likelihood, condition=z, obs=obs)
+        with numpyro.plate("obs", self.n_obs):
+            z = sample("z", prior)
+            sample("x", self.likelihood, condition=z, obs=obs)
 
 
-class SIRSDEGuide(eqx.Module):
+class SIRSDEGuide(AbstractNumpyroGuide):
     """Construct a guide for SIRSDE model with masked autoregressive flows.
 
     For the loc and scale parameters, the observations are embedded using the
-    mean and standard deviation across the observations.
-
-    Note that in the reparameterized model, loc, scale and z are independent given the
-    observations (and the likelihood is p(x|z_base*scale + loc)).
+    means and standard deviations across the observations. Note that in the
+    reparameterized model, loc, scale and z are independent given the observations.
     """
 
     loc_base: AbstractDistribution
@@ -188,13 +179,14 @@ class SIRSDEGuide(eqx.Module):
         )
         self.n_obs = n_obs
 
-    def __call__(self, obs: Array):
+    def __call__(self, obs: dict[str, Array]):
         """The numpyro model.
 
         Args:
             obs: An array of observations.
         """
-        self._argcheck(obs)
+        obs = obs["x"]
+        self._argcheck(obs)  # TODO leave this to beartype
         x_embedding = jnp.concatenate((obs.mean(-2), obs.std(axis=-2)))
         assert x_embedding.ndim == 1
         sample("loc_base", self.loc_base, condition=x_embedding)
@@ -215,7 +207,7 @@ class SIRSDETask(AbstractTaskWithoutReference):
 
     model: AbstractNumpyroModel
     guide: AbstractNumpyroGuide
-    observed_names = {"x"}
+    name = "sirsde"
 
     def __init__(self, key: Array, n_obs: int = 50):
         self.model = SIRSDEModel(n_obs=n_obs, use_surrogate=True)

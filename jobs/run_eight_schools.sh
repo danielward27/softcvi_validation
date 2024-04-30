@@ -8,7 +8,7 @@
 #SBATCH --account=math026082
 #SBATCH --array=0-100
 
-# Example submission: sbatch jobs/run_eight_schools_non_centered.sh
+# Example submission: sbatch jobs/run_eight_schools.sh
 module load lang/python/miniconda/3.9.7
 source activate flowjax_env
-python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name="eight_schools_non_centered"
+python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name="eight_schools"

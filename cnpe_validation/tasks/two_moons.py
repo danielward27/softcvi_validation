@@ -70,6 +70,7 @@ class TwoMoonsGuide(AbstractNumpyroGuide):
 class TwoMoonsTask(AbstractTaskWithoutReference):  # or with...
     guide: TwoMoonsGuide
     model = TwoMoonsModel()
+    name = "two_moons"
 
     def __init__(self, key: PRNGKeyArray):
         self.guide = TwoMoonsGuide(key)

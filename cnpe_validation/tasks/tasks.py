@@ -23,6 +23,7 @@ class AbstractTask(eqx.Module):
 
     model: eqx.AbstractVar[AbstractNumpyroModel]
     guide: eqx.AbstractVar[AbstractNumpyroGuide]
+    name: eqx.AbstractClassVar[str]
 
     def __check_init__(self):
         model_trace = shape_only_trace(self.model)

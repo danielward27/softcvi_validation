@@ -1,59 +1,58 @@
 from typing import ClassVar
 
+import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
 from flowjax.bijections import Scale
 from flowjax.distributions import (
     AbstractDistribution,
-    AbstractTransformed,
+    AbstractLocScaleDistribution,
+    Cauchy,
     Normal,
+    StudentT,
+    Transformed,
 )
 from flowjax.experimental.numpyro import sample
+from flowjax.utils import arraylike_to_array
+from flowjax.wrappers import NonTrainable
 from jax import Array
-from jax.scipy.stats import norm
-from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray
+from jaxtyping import Array, Float, PRNGKeyArray, ScalarLike
 from numpyro import plate
-from numpyro.distributions import HalfCauchy
 
 from cnpe_validation.tasks.tasks import (
     AbstractTaskWithReference,
     get_posterior_db_reference_posterior,
 )
-from cnpe_validation.utils import MLPParameterizedDistribution
+from cnpe_validation.utils import Folded, MLPParameterizedDistribution
 
 
-class _StandardHalfNormal(AbstractDistribution):  # TODO test
-    shape: tuple[int, ...]
-    cond_shape: ClassVar[None] = None
+def get_folded_distribution(
+    dist_type: type[AbstractLocScaleDistribution],
+    loc: ScalarLike = 0,
+    scale: ScalarLike = 1,
+    **kwargs,
+):
+    """Get a folded loc scale distribution.
 
-    def _log_prob(self, x, condition=None):
-        return jnp.where(x > 0, norm.logpdf(x) + jnp.log(2), -jnp.inf)
-
-    def _sample(self, key, condition=None):
-        return jnp.abs(jr.normal(key, shape=self.shape))
-
-
-class HalfNormal(AbstractTransformed):
-    """Half normal distribution.
-
-    Args:
-        scale: The scale of the half normal distribution.
+    This is parameterized with the location transformation prior to folding, and the
+    scale transformation after folding. Delaying the scale transformation can be useful
+    for reparameterization. Note if loc is 0, this corresponds to a half
+    distribution.
     """
-
-    base_dist: _StandardHalfNormal
-    bijection: Scale
-
-    def __init__(self, scale: ArrayLike = 1):
-        self.base_dist = _StandardHalfNormal(jnp.shape(scale))
-        self.bijection = Scale(scale)
+    loc, scale = jnp.broadcast_arrays(
+        *[arraylike_to_array(arr, dtype=float) for arr in [loc, scale]],
+    )
+    dist = dist_type(loc=loc, **kwargs)
+    dist = eqx.tree_at(lambda n: n.bijection.scale, dist, replace_fn=NonTrainable)
+    return Transformed(Folded(dist), Scale(scale))
 
 
 class EightSchoolsModel(AbstractNumpyroModel):
-    """Eight schools model. We reparamerterize (non-centering)."""
+    """Eight schools model."""
 
     observed_names = {"y"}
-    reparam_names = {"mu", "theta"}
+    reparam_names = {"mu", "theta", "tau"}
     num_schools: ClassVar[int] = 8
     sigma: ClassVar[Array] = jnp.array([15, 10, 16, 11, 9, 11, 10, 18])
 
@@ -62,7 +61,7 @@ class EightSchoolsModel(AbstractNumpyroModel):
         obs: dict[str, Float[Array, " 8"]] | None = None,
     ):
         mu = sample("mu", Normal(0, 5))
-        tau = sample("tau", HalfCauchy(scale=5))
+        tau = sample("tau", get_folded_distribution(Cauchy, loc=0, scale=5))
 
         with plate("num_schools", self.num_schools):
             theta = sample("theta", Normal(mu, tau))
@@ -78,9 +77,9 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
 
     theta_base: AbstractDistribution
     mu_base: AbstractDistribution
-    tau: AbstractDistribution
+    tau_base: AbstractDistribution
 
-    def __init__(self, key, **kwargs):
+    def __init__(self, key: PRNGKeyArray, **kwargs):
         key, subkey = jr.split(key)
         self.mu_base = MLPParameterizedDistribution(
             subkey,
@@ -90,9 +89,9 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         )
 
         key, subkey = jr.split(key)
-        self.tau = MLPParameterizedDistribution(
+        self.tau_base = MLPParameterizedDistribution(
             subkey,
-            HalfNormal(),
+            get_folded_distribution(StudentT, df=5, loc=0, scale=1),
             cond_dim=EightSchoolsModel.num_schools,
             **kwargs,
         )
@@ -110,7 +109,7 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         obs: dict[str, Float[Array, " 8"]],
     ):
         sample("mu_base", self.mu_base, condition=obs.get("y"))
-        sample("tau", self.tau, condition=obs.get("y"))
+        sample("tau_base", self.tau_base, condition=obs.get("y"))
 
         with plate("num_schools", EightSchoolsModel.num_schools):
             sample("theta_base", self.theta_base, condition=obs.get("y"))
@@ -119,10 +118,11 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
 class EightSchoolsTask(AbstractTaskWithReference):
     guide: EightSchoolsGuide
     model = EightSchoolsModel()
+    name = "eight_schools"
     posterior_db_name = "eight_schools-eight_schools_noncentered"
 
     def __init__(self, key: PRNGKeyArray):
-        self.guide = EightSchoolsGuide(key, width_size=20)
+        self.guide = EightSchoolsGuide(key, width_size=50)
 
     def get_observed_and_latents(
         self,

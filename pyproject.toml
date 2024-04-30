@@ -1,10 +1,18 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
-dependencies = ["flowjax", "equinox", "tqdm", "optax", "matplotlib", "diffrax"]
+dependencies = [
+    "flowjax",
+    "equinox",
+    "tqdm",
+    "optax",
+    "diffrax",
+    "beartype",
+    "requests", # TODO remove if I instead use python posteriordb interface
+]
 description = "Experiments for cnpe package."
 name = "cnpe_validation"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 version = "0.0.0"
 
 

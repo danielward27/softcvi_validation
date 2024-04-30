@@ -1,6 +1,7 @@
 import warnings
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -13,7 +14,8 @@ from flowjax.distributions import (
 from flowjax.wrappers import NonTrainable, unwrap
 from jax import Array, vmap
 from jax.flatten_util import ravel_pytree
-from jaxtyping import ArrayLike
+from jax.scipy.special import logsumexp
+from jaxtyping import ArrayLike, PRNGKeyArray
 
 
 def drop_nan_and_warn(*arrays):
@@ -51,6 +53,37 @@ class UniformWithLogisticBase(AbstractTransformed):
         self.bijection = Chain([Tanh(shape), Scale(scale), Loc(minval + scale)])
 
 
+class Folded(AbstractDistribution):
+    """Create a folded distribution.
+
+    Folded distributions "fold" the probability mass from below the origin,
+    to above it. This correspond to the absolute value transform
+    for the distribution. Note if the distribution is symmetric and centered at zero,
+    this corresponds to a half distribution.
+    """
+
+    dist: AbstractDistribution
+    shape: tuple[int, ...]
+    cond_shape: tuple[int, ...] | None
+
+    def __init__(self, dist: AbstractDistribution):
+        if dist.shape != ():
+            raise ValueError("Non-scalar distributions not yet supported with Folded.")
+
+        self.dist = dist
+        self.shape = dist.shape
+        self.cond_shape = dist.cond_shape
+
+    def _sample(self, key: PRNGKeyArray, condition=None):
+        return jnp.abs(self.dist._sample(key, condition))
+
+    def _log_prob(self, x, condition=None):
+        abs_x = jnp.abs(x)
+        above_below = jnp.stack((abs_x, -abs_x))
+        unfolded_probs = self.dist.log_prob(above_below, condition=condition)
+        return jnp.where(x < 0, -jnp.inf, logsumexp(unfolded_probs))
+
+
 class MLPParameterizedDistribution(AbstractDistribution):
     """Parameterize a distribution using a neural network.
 
@@ -74,7 +107,7 @@ class MLPParameterizedDistribution(AbstractDistribution):
         key: Array,
         distribution: AbstractDistribution,
         *,
-        cond_dim: int | str,
+        cond_dim: int | Literal["scalar"],
         width_size,
         depth: int = 1,
         **kwargs,

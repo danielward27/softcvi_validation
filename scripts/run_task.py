@@ -6,7 +6,6 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 import jaxtyping
-import matplotlib.pyplot as plt
 import optax
 
 with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
@@ -22,11 +21,7 @@ with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.bearty
 
 os.chdir(get_abspath_project_root())
 
-TASKS = {
-    "sirsde": SIRSDETask,
-    "eight_schools": EightSchoolsTask,
-    "two_moons": TwoMoonsTask,
-}
+TASKS = {t.name: t for t in [SIRSDETask, EightSchoolsTask, TwoMoonsTask]}
 
 
 def main(
@@ -36,7 +31,6 @@ def main(
     maximum_likelihood_steps: int,
     contrastive_steps: int,
     num_contrastive: int,
-    plot_losses: bool,
 ):
 
     key, subkey = jr.split(jr.PRNGKey(seed))
@@ -46,6 +40,7 @@ def main(
     obs, true_latents = task.get_observed_and_latents_and_check(subkey)
 
     posteriors = {}
+    metadata = {}
 
     key, subkey = jr.split(key)
 
@@ -57,10 +52,10 @@ def main(
             optax.clip_by_global_norm(1),
             optax.adam(optax.linear_schedule(1e-2, 5e-4, maximum_likelihood_steps)),
         ),
-        max_consecutive_errors=10,
+        max_consecutive_errors=100,
     )
-
-    guide_aml, losses = train(
+    method_name = "maximum likelihood"
+    posteriors[method_name], metadata[method_name] = train(
         subkey,
         guide=task.guide,
         loss_fn=loss,
@@ -68,13 +63,9 @@ def main(
         optimizer=optimizer,
     )
 
-    if plot_losses:
-        plt.plot(losses)
-        plt.show()
-    posteriors["Maximum likelihood"] = guide_aml
-
     # Fine tune with contrastive loss
     for stop_grad in [False, True]:
+        method_name = f"contrastive (stop grad={stop_grad})"
 
         loss = ContrastiveLoss(
             model=task.model,
@@ -83,31 +74,24 @@ def main(
             stop_grad_for_contrastive_sampling=stop_grad,
         )
 
-        key, subkey = jr.split(key)
-
         optimizer = optax.apply_if_finite(
             optax.chain(
                 optax.clip_by_global_norm(1),
                 optax.adam(1e-4),
             ),
-            max_consecutive_errors=500,
+            max_consecutive_errors=100,
         )
-
-        guide_contrastive, losses = train(
+        key, subkey = jr.split(key)
+        posteriors[method_name], metadata[method_name] = train(
             subkey,
-            guide=guide_aml,
+            guide=posteriors["maximum likelihood"],
             loss_fn=loss,
             steps=contrastive_steps,
             optimizer=optimizer,
         )
-        if plot_losses:
-            plt.plot(losses)
-            plt.show()
-
-        posteriors[f"contrastive (stop grad={stop_grad})"] = guide_contrastive
 
     def compute_true_latent_prob(true_latents):  # For a single latent
-        results = {
+        log_probs = {
             k: posterior.log_prob_original_space(
                 latents=true_latents,
                 model=task.model,
@@ -115,20 +99,20 @@ def main(
             )
             for k, posterior in posteriors.items()
         }
-
-        results[r"$p(\theta^*)$"] = prior_log_density(
+        log_probs["prior"] = prior_log_density(
             partial(task.model.call_without_reparam, obs=obs),
             data=true_latents,
             observed_nodes=task.model.observed_names,
         )
-        return results
+        return log_probs
 
     if isinstance(task, AbstractTaskWithReference):  # Batch of "true" samples
         compute_true_latent_prob = eqx.filter_vmap(compute_true_latent_prob)
 
-    results = compute_true_latent_prob(true_latents)
-    file_path = f"{os.getcwd()}/results/{task_name}/{seed}.npz"
-    jnp.savez(file_path, **results)
+    log_prob_true = compute_true_latent_prob(true_latents)
+    results_dir = f"{os.getcwd()}/results/{task.name}/"
+    jnp.savez(results_dir + f"true_posterior_log_probs_{seed}.npz", **log_prob_true)
+    jnp.savez(results_dir + f"metadata_{seed}.npz", **metadata)
 
 
 if __name__ == "__main__":
@@ -136,10 +120,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="NPE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--maximum-likelihood-steps", type=int, default=2000)
+    parser.add_argument("--maximum-likelihood-steps", type=int, default=4000)
     parser.add_argument("--contrastive-steps", type=int, default=2000)
-    parser.add_argument("--num-contrastive", type=int, default=2000)
-    parser.add_argument("--plot-losses", action="store_true")
+    parser.add_argument("--num-contrastive", type=int, default=20)
     args = parser.parse_args()
 
     main(
@@ -148,5 +131,4 @@ if __name__ == "__main__":
         maximum_likelihood_steps=args.maximum_likelihood_steps,
         contrastive_steps=args.contrastive_steps,
         num_contrastive=args.num_contrastive,
-        plot_losses=args.plot_losses,
     )
