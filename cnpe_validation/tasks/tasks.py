@@ -59,7 +59,16 @@ class AbstractTask(eqx.Module):
         else:
             validate_data_fn(obs | latents)
 
-        return obs, latents
+        data = {"observed": obs, "latents": latents}
+        for key, dat in data.items():
+            for name, arr in dat.items():
+                dat[name] = eqx.error_if(
+                    arr,
+                    ~jnp.isfinite(arr),
+                    f"{name} in {key} had non-finite values",
+                )
+
+        return data["observed"], data["latents"]
 
     def _check_data_names(self, obs: dict[str, Array], latents: dict[str, Array]):
         latent_names = (
