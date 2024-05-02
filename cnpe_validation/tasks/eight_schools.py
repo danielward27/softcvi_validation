@@ -91,7 +91,7 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         key, subkey = jr.split(key)
         self.tau_base = MLPParameterizedDistribution(
             subkey,
-            get_folded_distribution(StudentT, df=2),
+            get_folded_distribution(StudentT, df=3),
             cond_dim=EightSchoolsModel.num_schools,
             **kwargs,
         )

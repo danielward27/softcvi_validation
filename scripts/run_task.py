@@ -38,7 +38,6 @@ def main(
 
     key, subkey = jr.split(key)
     obs, true_latents = task.get_observed_and_latents_and_check(subkey)
-
     posteriors = {}
     metadata = {}
 
