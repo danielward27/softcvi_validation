@@ -91,7 +91,7 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         key, subkey = jr.split(key)
         self.tau_base = MLPParameterizedDistribution(
             subkey,
-            get_folded_distribution(StudentT, df=3),
+            get_folded_distribution(StudentT, df=5),
             cond_dim=EightSchoolsModel.num_schools,
             **kwargs,
         )
@@ -99,7 +99,7 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         key, subkey = jr.split(key)
         self.theta_base = MLPParameterizedDistribution(
             subkey,
-            StudentT(df=3),
+            StudentT(df=5),
             cond_dim="scalar",
             **kwargs,
         )
@@ -108,11 +108,12 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
         self,
         obs: dict[str, Float[Array, " 8"]],
     ):
-        sample("mu_base", self.mu_base, condition=obs.get("y"))
-        sample("tau_base", self.tau_base, condition=obs.get("y"))
+        obs = jnp.arctan(obs["y"] / 50)  # For better robustness
+        sample("mu_base", self.mu_base, condition=obs)
+        sample("tau_base", self.tau_base, condition=obs)
 
         with plate("num_schools", EightSchoolsModel.num_schools):
-            sample("theta_base", self.theta_base, condition=obs.get("y"))
+            sample("theta_base", self.theta_base, condition=obs)
 
 
 class EightSchoolsTask(AbstractTaskWithReference):
