@@ -39,7 +39,7 @@ def main(
     key, subkey = jr.split(key)
     obs, true_latents = task.get_observed_and_latents_and_check(subkey)
     posteriors = {}
-    metadata = {}
+    losses = {}
 
     key, subkey = jr.split(key)
 
@@ -54,7 +54,7 @@ def main(
         max_consecutive_errors=100,
     )
     method_name = "maximum likelihood"
-    posteriors[method_name], metadata[method_name] = train(
+    posteriors[method_name], losses[method_name] = train(
         subkey,
         guide=task.guide,
         loss_fn=loss,
@@ -81,7 +81,7 @@ def main(
             max_consecutive_errors=100,
         )
         key, subkey = jr.split(key)
-        posteriors[method_name], metadata[method_name] = train(
+        posteriors[method_name], losses[method_name] = train(
             subkey,
             guide=posteriors["maximum likelihood"],
             loss_fn=loss,
@@ -111,7 +111,7 @@ def main(
     log_prob_true = compute_true_latent_prob(true_latents)
     results_dir = f"{os.getcwd()}/results/{task.name}/"
     jnp.savez(results_dir + f"true_posterior_log_probs_{seed}.npz", **log_prob_true)
-    jnp.savez(results_dir + f"metadata_{seed}.npz", **metadata)
+    jnp.savez(results_dir + f"losses_{seed}.npz", **losses)
 
 
 if __name__ == "__main__":
