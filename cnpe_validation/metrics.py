@@ -6,6 +6,7 @@ from numpyro import handlers
 from numpyro.infer import Predictive, log_likelihood
 
 
+# TODO remove below in favour of CNPE model/guide classes?
 def sample_posterior(key, guide, obs, n: int, model=None):
     """Sample the posterior. If a model is provided, we also sample the predictive."""
     key1, key2 = jr.split(key)

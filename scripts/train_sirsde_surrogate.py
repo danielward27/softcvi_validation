@@ -35,7 +35,13 @@ def main(key, n_sim: int, *, plot_losses: bool = True):
     key, subkey = jr.split(key)
     surrogate_simulator = sirsde.get_surrogate_untrained()
 
-    optimizer = optax.apply_if_finite(optax.adam(1e-4), 10)
+    optimizer = optax.apply_if_finite(
+        optax.chain(
+            optax.clip_by_global_norm(1),
+            optax.adam(optax.linear_schedule(1e-4, 5e-5, 2000)),
+        ),
+        max_consecutive_errors=100,
+    )
     key, subkey = jr.split(key)
     surrogate_simulator, losses = fit_to_data(
         key=subkey,

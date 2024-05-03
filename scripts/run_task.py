@@ -48,8 +48,8 @@ def main(
 
     optimizer = optax.apply_if_finite(
         optax.chain(
-            optax.clip_by_global_norm(1),
-            optax.adam(optax.linear_schedule(1e-2, 5e-4, maximum_likelihood_steps)),
+            optax.clip_by_global_norm(5),
+            optax.adam(optax.linear_schedule(1e-2, 1e-4, maximum_likelihood_steps)),
         ),
         max_consecutive_errors=100,
     )
@@ -75,8 +75,8 @@ def main(
 
         optimizer = optax.apply_if_finite(
             optax.chain(
-                optax.clip_by_global_norm(1),
-                optax.adam(1e-4),
+                optax.clip_by_global_norm(5),
+                optax.adam(optax.linear_schedule(1e-3, 1e-5, contrastive_steps)),
             ),
             max_consecutive_errors=100,
         )

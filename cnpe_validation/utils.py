@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Literal
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 from flowjax.bijections import Chain, Loc, Scale, Tanh
 from flowjax.distributions import (
@@ -16,7 +15,7 @@ from flowjax.wrappers import NonTrainable, unwrap
 from jax import Array, vmap
 from jax.flatten_util import ravel_pytree
 from jax.scipy.special import logsumexp
-from jaxtyping import Array, ArrayLike, PRNGKeyArray, PyTree
+from jaxtyping import Array, ArrayLike, PRNGKeyArray
 
 
 def drop_nan_and_warn(*arrays):
