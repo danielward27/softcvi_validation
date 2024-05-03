@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import equinox as eqx
 import jax
@@ -30,9 +30,11 @@ from flowjax.distributions import (
 from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from jax import Array
+from jaxtyping import Array, Float, PRNGKeyArray
 
 from cnpe_validation import constraints
 from cnpe_validation.tasks.tasks import AbstractTaskWithoutReference
+from cnpe_validation.utils import MLPParameterizedDistribution
 
 
 def infer_processors(z, x):
@@ -40,9 +42,10 @@ def infer_processors(z, x):
 
     Map to unbounded domain, then perform standard scaling.
     """
+    eps = 1e-6
     samps_and_constraints = {
         "z": (z, [constraints.Positive()] * 4),
-        "x": (x, [*[constraints.Positive()] * 4, constraints.Interval(0, 1)]),
+        "x": (x, [*[constraints.Positive()] * 4, constraints.Interval(-eps, 1 + eps)]),
     }
 
     preprocessors = {}
@@ -52,7 +55,6 @@ def infer_processors(z, x):
         mean, std = unbounded.mean(axis=0), unbounded.std(axis=0)
         scaler = Affine(-mean / std, 1 / std)
         preprocessors[k] = Chain([bijection, scaler])
-
     return preprocessors
 
 
@@ -95,7 +97,6 @@ class SIRSDEModel(AbstractNumpyroModel):
     Uses a surrogate simulator (by default).
 
     Args:
-        n_obs: The number of observations.
         use_surrogate: Whether to use the surrogate model instead of the simulator.
             Note z and Defaults to True.
     """
@@ -104,11 +105,11 @@ class SIRSDEModel(AbstractNumpyroModel):
     scale: AbstractDistribution
     z: Callable
     likelihood: AbstractDistribution
-    n_obs: int
+    n_obs = 50
     reparam_names = {"loc", "scale", "z"}
     observed_names = {"x"}
 
-    def __init__(self, n_obs: int, *, use_surrogate: bool = True):
+    def __init__(self, *, use_surrogate: bool = True):
         if use_surrogate:
             self.likelihood = get_surrogate()
             # As surrogate is trained on scaled z space we transform the prior to match
@@ -123,7 +124,6 @@ class SIRSDEModel(AbstractNumpyroModel):
 
         self.loc = Normal(jnp.full(self.likelihood.cond_shape, -2))
         self.scale = LogNormal(-1, scale=jnp.full(self.likelihood.cond_shape, 0.3))
-        self.n_obs = n_obs
 
     def call_without_reparam(self, obs: dict[str, Array] | None = None):
         """The numpyro model.
@@ -153,53 +153,42 @@ class SIRSDEGuide(AbstractNumpyroGuide):
     loc_base: AbstractDistribution
     scale_base: AbstractDistribution
     z_base: AbstractDistribution
-    n_obs: int
 
-    def __init__(self, key: Array, *, n_obs: int, **kwargs):
-        keys = jr.split(key, 3)
-        self.loc_base = masked_autoregressive_flow(
-            key=keys[0],
-            base_dist=Normal(jnp.zeros(SIRSDESimulator.z_dim)),
-            cond_dim=2 * SIRSDESimulator.x_dim,
-            **kwargs,
-        )
+    def __init__(self, key: Array, **kwargs):
+        z_key, *keys = jr.split(key, 3)
 
-        self.scale_base = masked_autoregressive_flow(
-            key=keys[1],
-            base_dist=Normal(jnp.zeros(SIRSDESimulator.z_dim)),
-            cond_dim=2 * SIRSDESimulator.x_dim,
-            **kwargs,
+        # We can use a normal variational distribution for scale, as the lognormal
+        # is reparameterized to a standard normal.
+        self.loc_base, self.scale_base = (
+            MLPParameterizedDistribution(
+                key=k,
+                distribution=Normal(jnp.zeros(SIRSDESimulator.z_dim)),
+                cond_dim=2 * SIRSDESimulator.x_dim,
+                width_size=50,
+            )
+            for k in keys
         )
 
         self.z_base = masked_autoregressive_flow(
-            key=keys[2],
+            key=z_key,
             base_dist=Normal(jnp.zeros((SIRSDESimulator.z_dim,))),
             cond_dim=SIRSDESimulator.x_dim,
             **kwargs,
         )
-        self.n_obs = n_obs
 
-    def __call__(self, obs: dict[str, Array]):
+    def __call__(self, obs: dict[Literal["x"], Float[Array, "50 5"]]):
         """The numpyro model.
 
         Args:
             obs: An array of observations.
         """
         obs = obs["x"]
-        self._argcheck(obs)  # TODO leave this to beartype
-        x_embedding = jnp.concatenate((obs.mean(-2), obs.std(axis=-2)))
-        assert x_embedding.ndim == 1
+        x_embedding = jnp.concatenate((obs.mean(0), obs.std(axis=0)))
         sample("loc_base", self.loc_base, condition=x_embedding)
         sample("scale_base", self.scale_base, condition=x_embedding)
 
         with numpyro.plate("obs", obs.shape[-2]):
-            z = sample("z_base", self.z_base, condition=obs)
-
-        assert z.shape == (self.n_obs, self.z_base.shape[-1])
-
-    def _argcheck(self, obs):
-        if (s := obs.shape[-2]) != self.n_obs:
-            raise ValueError(f"Expected obs.shape[-2]=={self.n_obs}, got {s}")
+            sample("z_base", self.z_base, condition=obs)
 
 
 class SIRSDETask(AbstractTaskWithoutReference):
@@ -209,9 +198,9 @@ class SIRSDETask(AbstractTaskWithoutReference):
     guide: AbstractNumpyroGuide
     name = "sirsde"
 
-    def __init__(self, key: Array, n_obs: int = 50):
-        self.model = SIRSDEModel(n_obs=n_obs, use_surrogate=True)
-        self.guide = SIRSDEGuide(key, n_obs=n_obs)
+    def __init__(self, key: PRNGKeyArray):
+        self.model = SIRSDEModel(use_surrogate=True)
+        self.guide = SIRSDEGuide(key)
 
 
 class SIRSDESimulator(AbstractDistribution):

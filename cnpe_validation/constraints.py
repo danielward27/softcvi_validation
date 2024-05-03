@@ -37,7 +37,12 @@ class Positive(AbstractConstraint):
 
 
 class Interval(AbstractConstraint):
-    """maps interval -> unbounded by transforming to [-1, 1], and applying arctanh."""
+    """maps interval -> unbounded by transforming to [-1, 1], and applying arctanh.
+
+    Args:
+        low: Lower bound o interval.
+        high: Upper bound of interval.
+    """
 
     bijection: Chain
 
