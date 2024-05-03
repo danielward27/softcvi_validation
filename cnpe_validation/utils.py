@@ -33,41 +33,6 @@ def drop_nan_and_warn(*arrays):
     return arrays
 
 
-def change_initialization(
-    pytree: PyTree,
-    key: PRNGKeyArray,
-    initialization_fn: Callable,
-    type_filter: type = PyTree,
-):
-    """Reinitialize a pytree/model.
-
-    Type filter will only reinitilize particular subtypes within the pytree (by defult
-    it is PyTree i.e. the entire) model.
-
-    Args:
-        pytree: The pytree to reinitialize.
-        key: Jax PRNGKey.
-        initialization_fn: Function taking key and shape (see jax.nn.initializers).
-        type_filter: If provided, only submodules matching the type will be
-            reinitialized.
-    """
-    to_reparam = eqx.filter(
-        pytree,
-        filter_spec=lambda leaf: isinstance(leaf, type_filter),
-        is_leaf=lambda leaf: isinstance(leaf, type_filter),
-    )
-    params, static = eqx.partition(to_reparam, eqx.is_inexact_array)
-    treedef = jax.tree_util.tree_structure(params)
-    keys = jax.random.split(key, treedef.num_leaves)
-    key_tree = jax.tree_unflatten(treedef, keys)
-    params = jax.tree_util.tree_map(
-        lambda leaf, key: initialization_fn(key, leaf.shape),
-        params,
-        key_tree,
-    )
-    return eqx.combine(eqx.combine(params, static), pytree)
-
-
 class UniformWithLogisticBase(AbstractTransformed):
     """A uniform distribution parameterized as a transformed logistic distribution.
 
