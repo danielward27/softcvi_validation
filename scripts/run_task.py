@@ -8,7 +8,11 @@ import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
-    from cnpe.losses import AmortizedMaximumLikelihood, ContrastiveLoss
+    from cnpe.losses import (
+        AmortizedMaximumLikelihood,
+        ContrastiveLoss,
+        NegativeEvidenceLowerBound,
+    )
     from cnpe.train import train
 
     from cnpe_validation.tasks.eight_schools import EightSchoolsTask
@@ -39,19 +43,30 @@ def main(
     posteriors = {}
     losses = {}
 
-    key, subkey = jr.split(key)
-
-    # Pretrain using amortized maximum likelihood
-    loss = AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
-
     optimizer = optax.apply_if_finite(
         optax.chain(
-            # optax.clip_by_global_norm(5),
-            optax.adam(optax.linear_schedule(1e-2, 1e-4, maximum_likelihood_steps)),
+            optax.adam(optax.linear_schedule(1e-3, 1e-4, maximum_likelihood_steps)),
         ),
         max_consecutive_errors=100,
     )
+
+    # Train using VI
+    method_name = "evidence lower bound"
+    loss = NegativeEvidenceLowerBound(task.model.reparam(set_val=True), obs=obs)
+
+    key, subkey = jr.split(key)
+    posteriors[method_name], losses[method_name] = train(
+        subkey,
+        guide=task.guide,
+        loss_fn=loss,
+        steps=maximum_likelihood_steps,
+        optimizer=optimizer,
+    )
+
+    # Train using maximum likelihood
     method_name = "maximum likelihood"
+    loss = AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
+
     posteriors[method_name], losses[method_name] = train(
         subkey,
         guide=task.guide,
@@ -62,7 +77,7 @@ def main(
 
     # Fine tune with contrastive loss
     for stop_grad in [False, True]:
-        method_name = f"contrastive (stop grad={stop_grad})"
+        method_name = f"npe-pp (stop grad={stop_grad})"
 
         loss = ContrastiveLoss(
             model=task.model.reparam(),
@@ -73,7 +88,6 @@ def main(
 
         optimizer = optax.apply_if_finite(
             optax.chain(
-                # optax.clip_by_global_norm(5),
                 optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
             ),
             max_consecutive_errors=100,
