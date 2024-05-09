@@ -51,6 +51,7 @@ def get_folded_distribution(
 class EightSchoolsModel(AbstractNumpyroModel):
     """Eight schools model."""
 
+    reparameterized: bool | None = None
     observed_names = {"y"}
     reparam_names = {"mu", "theta", "tau"}
     num_schools: ClassVar[int] = 8

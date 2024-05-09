@@ -1,6 +1,5 @@
 import argparse
 import os
-from functools import partial
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -10,7 +9,6 @@ import optax
 
 with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
     from cnpe.losses import AmortizedMaximumLikelihood, ContrastiveLoss
-    from cnpe.numpyro_utils import prior_log_density
     from cnpe.train import train
 
     from cnpe_validation.tasks.eight_schools import EightSchoolsTask
@@ -37,18 +35,18 @@ def main(
     task = TASKS[task_name](subkey)
 
     key, subkey = jr.split(key)
-    obs, true_latents = task.get_observed_and_latents_and_check(subkey)
+    obs, true_latents = task.get_observed_and_latents_and_validate(subkey)
     posteriors = {}
     losses = {}
 
     key, subkey = jr.split(key)
 
     # Pretrain using amortized maximum likelihood
-    loss = AmortizedMaximumLikelihood(task.model)
+    loss = AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
 
     optimizer = optax.apply_if_finite(
         optax.chain(
-            optax.clip_by_global_norm(5),
+            # optax.clip_by_global_norm(5),
             optax.adam(optax.linear_schedule(1e-2, 1e-4, maximum_likelihood_steps)),
         ),
         max_consecutive_errors=100,
@@ -67,7 +65,7 @@ def main(
         method_name = f"contrastive (stop grad={stop_grad})"
 
         loss = ContrastiveLoss(
-            model=task.model,
+            model=task.model.reparam(),
             obs=obs,
             n_contrastive=num_contrastive,
             stop_grad_for_contrastive_sampling=stop_grad,
@@ -75,8 +73,8 @@ def main(
 
         optimizer = optax.apply_if_finite(
             optax.chain(
-                optax.clip_by_global_norm(5),
-                optax.adam(optax.linear_schedule(1e-3, 1e-5, contrastive_steps)),
+                # optax.clip_by_global_norm(5),
+                optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
             ),
             max_consecutive_errors=100,
         )
@@ -98,10 +96,8 @@ def main(
             )
             for k, posterior in posteriors.items()
         }
-        log_probs["prior"] = prior_log_density(
-            partial(task.model.call_without_reparam, obs=obs),
-            data=true_latents,
-            observed_nodes=task.model.observed_names,
+        log_probs["prior"] = task.model.reparam(set_val=False).prior_log_prob(
+            true_latents,
         )
         return log_probs
 

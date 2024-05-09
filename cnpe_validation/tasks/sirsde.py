@@ -105,6 +105,7 @@ class SIRSDEModel(AbstractNumpyroModel):
     scale: AbstractDistribution
     z: Callable
     likelihood: AbstractDistribution
+    reparameterized: bool | None
     n_obs = 50
     reparam_names = {"loc", "scale", "z"}
     observed_names = {"x"}
@@ -124,6 +125,7 @@ class SIRSDEModel(AbstractNumpyroModel):
 
         self.loc = Normal(jnp.full(self.likelihood.cond_shape, -2))
         self.scale = LogNormal(-1, scale=jnp.full(self.likelihood.cond_shape, 0.3))
+        self.reparameterized = None
 
     def call_without_reparam(self, obs: dict[str, Array] | None = None):
         """The numpyro model.

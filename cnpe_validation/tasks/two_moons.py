@@ -13,6 +13,7 @@ from cnpe_validation.utils import MLPParameterizedDistribution, UniformWithLogis
 
 
 class TwoMoonsModel(AbstractNumpyroModel):
+    reparameterized: bool | None = None
     observed_names = {"x"}
     reparam_names = {"theta", "alpha"}
 

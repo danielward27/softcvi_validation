@@ -26,9 +26,10 @@ class AbstractTask(eqx.Module):
     name: eqx.AbstractClassVar[str]
 
     def __check_init__(self):
-        model_trace = shape_only_trace(self.model)
+        model = self.model.reparam()
+        model_trace = shape_only_trace(model)
         obs = {}
-        for name in self.model.observed_names:
+        for name in model.observed_names:
             if name not in model_trace:
                 raise ValueError(
                     f"Trace of model does not include observed node {name}.",
@@ -39,52 +40,9 @@ class AbstractTask(eqx.Module):
             )  # keep runtime type checker happy
 
         check_model_guide_match(
-            model_trace=shape_only_trace(self.model, obs=obs),
+            model_trace=shape_only_trace(model, obs=obs),
             guide_trace=shape_only_trace(self.guide, obs=obs),
         )
-
-    def get_observed_and_latents_and_check(self, key: PRNGKeyArray):
-        """get_observed_and_latents and checks matches model trace and model.observed_names."""
-        obs, latents = self.get_observed_and_latents(key)
-
-        # These should be methods defined on abstract class?
-        validate_data_fn = partial(
-            validate_data_and_model_match,
-            model=self.model.call_without_reparam,
-        )
-
-        if isinstance(self, AbstractTaskWithReference):
-            validate_data_fn(obs)
-            eqx.filter_vmap(validate_data_fn)(latents)  # Batch of reference samples
-        else:
-            validate_data_fn(obs | latents)
-
-        data = {"observed": obs, "latents": latents}
-        for key, dat in data.items():
-            for name, arr in dat.items():
-                dat[name] = eqx.error_if(
-                    arr,
-                    ~jnp.isfinite(arr),
-                    f"{name} in {key} had non-finite values",
-                )
-
-        return data["observed"], data["latents"]
-
-    def _check_data_names(self, obs: dict[str, Array], latents: dict[str, Array]):
-        latent_names = (
-            get_sample_site_names(self.model.call_without_reparam).all
-            - self.model.observed_names
-        )
-
-        if obs.keys() != self.model.observed_names:
-            raise ValueError(
-                f"Obsersvations had keys {obs.keys()}, but model had "
-                f"{self.model.observed_names}",
-            )
-        if latents.keys() != latent_names:
-            raise ValueError(
-                f"Latents had keys {latents.keys()}, but model had {latent_names}.",
-            )
 
     @abstractmethod
     def get_observed_and_latents(
@@ -106,6 +64,21 @@ class AbstractTask(eqx.Module):
         """
         pass
 
+    def get_observed_and_latents_and_validate(self, key: PRNGKeyArray):
+        """Get data and checks matches model trace and model.observed_names."""
+        obs, latents = self.get_observed_and_latents(key)
+        self.validate_data(obs, latents)
+
+        data = {"observed": obs, "latents": latents}
+        for key, dat in data.items():
+            for name, arr in dat.items():
+                dat[name] = eqx.error_if(
+                    x=arr,
+                    pred=~jnp.isfinite(arr),
+                    msg=f"{name} in {key} had non-finite values",
+                )
+        return data["observed"], data["latents"]
+
 
 class AbstractTaskWithoutReference(AbstractTask):
     """A task without a reference posterior.
@@ -115,14 +88,15 @@ class AbstractTaskWithoutReference(AbstractTask):
 
     def get_observed_and_latents(self, key):
         """Generate an observation and ground truth latents from the model."""
-        latents = Predictive(self.model.call_without_reparam, num_samples=1)(key)
+        latents = Predictive(self.model.reparam(set_val=False), num_samples=1)(key)
         latents = {k: v.squeeze(0) for k, v in latents.items()}
         obs = {name: latents.pop(name) for name in self.model.observed_names}
         return obs, latents
 
     def validate_data(self, obs: dict[str, Array], latents: dict[str, Array]):
-        self._check_data_names(obs, latents)
-        validate_data_and_model_match(obs | latents, self.model.call_without_reparam)
+        model = self.model.reparam(set_val=False)
+        for data, names in [(obs, model.observed_names), (latents, model.latent_names)]:
+            validate_data_and_model_match(data, model=model, assert_present=names)
 
 
 class AbstractTaskWithReference(AbstractTask):
@@ -130,12 +104,14 @@ class AbstractTaskWithReference(AbstractTask):
 
     def validate_data(self, obs: dict[str, Array], latents: dict[str, Array]):
         """Checks that there exists a single batch dimension in latents."""
-        self._check_data_names(obs, latents)
-        validation_fn = partial(validate_data_and_model_match)(
-            model=self.model.call_without_reparam,
+        model = self.model.reparam(set_val=False)
+        validate_data_and_model_match(obs, model, assert_present=model.observed_names)
+        validate_latents_fn = partial(
+            validate_data_and_model_match,
+            model=model,
+            assert_present=model.latent_names,
         )
-        validation_fn(obs)
-        eqx.filter_vmap(validation_fn)(latents)
+        eqx.filter_vmap(validate_latents_fn)(latents)
 
 
 # TODO Consider using associated python package
