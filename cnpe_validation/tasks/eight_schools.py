@@ -118,15 +118,16 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
 
 
 class EightSchoolsTask(AbstractTaskWithReference):
+    model: EightSchoolsModel
     guide: EightSchoolsGuide
-    model = EightSchoolsModel()
     name = "eight_schools"
     posterior_db_name = "eight_schools-eight_schools_noncentered"
 
     def __init__(self, key: PRNGKeyArray):
+        self.model = EightSchoolsModel()
         self.guide = EightSchoolsGuide(key, width_size=50)
 
-    def get_observed_and_latents(
+    def get_latents_and_observed(
         self,
         key: PRNGKeyArray | None = None,
     ) -> tuple[dict[str, Array], dict[str, Array]]:
@@ -134,6 +135,6 @@ class EightSchoolsTask(AbstractTaskWithReference):
 
         Key is ignored, but provided for consistency of API.
         """
+        latents = get_posterior_db_reference_posterior(self.posterior_db_name)
         obs = {"y": jnp.array([28, 8, -3, 7, -1, 1, 18, 12], dtype=float)}
-        parameters = get_posterior_db_reference_posterior(self.posterior_db_name)
-        return obs, parameters
+        return latents, obs

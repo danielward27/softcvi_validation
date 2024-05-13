@@ -1,22 +1,28 @@
-# # %%
-# import jax.random as jr
-# import pytest
-# from cnpe.numpyro_utils import shape_only_trace
+import jax.random as jr
+import pytest
+from cnpe.numpyro_utils import shape_only_trace
+from numpyro.util import check_model_guide_match
 
-# from cnpe_validation.tasks.eight_schools import EightSchoolsTask
-# from cnpe_validation.tasks.tasks import AbstractTask
+from cnpe_validation.tasks.eight_schools import EightSchoolsTask
+from cnpe_validation.tasks.multimodal_gaussian import (
+    MultimodelGaussianMisspecifiedGuideTask,
+)
+from cnpe_validation.tasks.sirsde import SIRSDETask
+
+test_cases = [
+    EightSchoolsTask,
+    MultimodelGaussianMisspecifiedGuideTask,
+    SIRSDETask,
+]
 
 
-# def validate_task(task: AbstractTask):
-#     model_trace = shape_only_trace(task.model)
-#     guide_trace =
+@pytest.mark.parametrize("task", test_cases)
+def test_tasks(task):
+    key = jr.PRNGKey(0)
+    task = task(key)
+    _, obs = task.get_latents_and_observed_and_validate(key)
 
-
-# test_cases = [
-#     EightSchoolsTask(jr.PRNGKey(0)),
-# ]
-
-
-# @pytest.mark.parameterize(("task",), test_cases)
-# def test_tasks(task: AbstractTask):
-#     validate_task(task)
+    check_model_guide_match(
+        model_trace=shape_only_trace(task.model.reparam(set_val=True), obs=obs),
+        guide_trace=shape_only_trace(task.guide, obs=obs),
+    )

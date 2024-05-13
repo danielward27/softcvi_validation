@@ -16,6 +16,10 @@ with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.bearty
     from cnpe.train import train
 
     from cnpe_validation.tasks.eight_schools import EightSchoolsTask
+    from cnpe_validation.tasks.multimodal_gaussian import (
+        MultimodelGaussianMisspecifiedGuideTask,
+        MultimodelGaussianWellSpecifiedGuideTask,
+    )
     from cnpe_validation.tasks.sirsde import SIRSDETask
     from cnpe_validation.tasks.tasks import AbstractTaskWithReference
     from cnpe_validation.tasks.two_moons import TwoMoonsTask
@@ -23,7 +27,16 @@ with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.bearty
 
 os.chdir(get_abspath_project_root())
 
-TASKS = {t.name: t for t in [SIRSDETask, EightSchoolsTask, TwoMoonsTask]}
+TASKS = {
+    t.name: t
+    for t in [
+        SIRSDETask,
+        EightSchoolsTask,
+        TwoMoonsTask,
+        MultimodelGaussianMisspecifiedGuideTask,
+        MultimodelGaussianWellSpecifiedGuideTask,
+    ]
+}
 
 
 def main(
@@ -39,14 +52,12 @@ def main(
     task = TASKS[task_name](subkey)
 
     key, subkey = jr.split(key)
-    obs, true_latents = task.get_observed_and_latents_and_validate(subkey)
+    obs, true_latents = task.get_latents_and_observed_and_validate(subkey)
     posteriors = {}
     losses = {}
 
     optimizer = optax.apply_if_finite(
-        optax.chain(
-            optax.adam(optax.linear_schedule(1e-3, 1e-4, maximum_likelihood_steps)),
-        ),
+        optax.adam(optax.linear_schedule(1e-3, 1e-4, maximum_likelihood_steps)),
         max_consecutive_errors=100,
     )
 
@@ -87,9 +98,7 @@ def main(
         )
 
         optimizer = optax.apply_if_finite(
-            optax.chain(
-                optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
-            ),
+            optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
             max_consecutive_errors=100,
         )
         key, subkey = jr.split(key)

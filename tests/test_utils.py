@@ -1,9 +1,10 @@
 import jax.numpy as jnp
+import jax.random as jr
 import pytest
 from flowjax.distributions import Normal
 from jax.scipy import integrate
 
-from cnpe_validation.utils import Folded
+from cnpe_validation.utils import Folded, TruncNormal
 
 
 def test_folded():
@@ -18,3 +19,13 @@ def test_folded():
     y = jnp.exp(folded.log_prob(x))
     integral = integrate.trapezoid(y, x)
     assert pytest.approx(1, abs=0.01) == integral
+
+
+def test_truncnorm():
+    tnorm = TruncNormal(lower=-2, upper=2, loc=1, scale=2)
+    samp = tnorm.sample(jr.PRNGKey(0), (1000,))
+    assert samp.max() < tnorm.upper
+    assert samp.max() > tnorm.upper - 0.1
+
+    assert samp.min() > tnorm.lower
+    assert samp.min() < tnorm.lower + 0.1

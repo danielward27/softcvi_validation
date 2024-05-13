@@ -1,20 +1,23 @@
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 
 import equinox as eqx
 import jax.numpy as jnp
-from flowjax.bijections import Chain, Loc, Scale, Tanh
+import jax.random as jr
+from flowjax.bijections import Chain, Loc, Scale, SoftPlus, Tanh
 from flowjax.distributions import (
     AbstractDistribution,
     AbstractTransformed,
     Logistic,
 )
-from flowjax.wrappers import NonTrainable, unwrap
+from flowjax.utils import arraylike_to_array
+from flowjax.wrappers import AbstractUnwrappable, BijectionReparam, NonTrainable, unwrap
 from jax import Array, vmap
 from jax.flatten_util import ravel_pytree
 from jax.scipy.special import logsumexp
+from jax.scipy.stats import truncnorm
 from jaxtyping import Array, ArrayLike, PRNGKeyArray
 
 
@@ -30,6 +33,44 @@ def drop_nan_and_warn(*arrays):
         )
         arrays = [jnp.compress(is_finite, a, 0) for a in arrays]
     return arrays
+
+
+class TruncNormal(AbstractDistribution):
+    loc: Array
+    scale: Array | AbstractUnwrappable[Array]
+    lower: int | float
+    upper: int | float
+    shape: tuple[int, ...]
+    cond_shape: ClassVar[None] = None
+
+    def __init__(
+        self,
+        lower: float | int,
+        upper: float | int,
+        loc: ArrayLike = 0,
+        scale: ArrayLike = 1,
+    ):
+        self.loc, scale = jnp.broadcast_arrays(
+            arraylike_to_array(loc, dtype=float),
+            arraylike_to_array(scale, dtype=float),
+        )
+        self.scale = BijectionReparam(scale, SoftPlus())
+        self.lower, self.upper = lower, upper
+        self.shape = self.loc.shape
+
+    def _log_prob(self, x, condition=None):
+        a = (self.lower - self.loc) / self.scale
+        b = (self.upper - self.loc) / self.scale
+        return truncnorm.logpdf(x, a, b, self.loc, self.scale)
+
+    def _sample(self, key, condition=None):
+        standard_tnorm = jr.truncated_normal(
+            key,
+            lower=self.lower / self.scale - self.loc / self.scale,
+            upper=self.upper / self.scale - self.loc / self.scale,
+            shape=self.shape,
+        )
+        return standard_tnorm * self.scale + self.loc
 
 
 class UniformWithLogisticBase(AbstractTransformed):
