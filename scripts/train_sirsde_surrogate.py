@@ -16,6 +16,7 @@ from cnpe_validation.utils import drop_nan_and_warn
 def main(key, n_sim: int, *, plot_losses: bool = True):
     """Run the SIR model, fit and save the surrogate and the inferred processor."""
     model = sirsde.SIRSDEModel(n_obs=1, use_surrogate=False)
+    model = model.reparam(set_val=False)
 
     # Simulations for surrogate likelihood training
     pred = Predictive(model, num_samples=n_sim)
@@ -37,7 +38,7 @@ def main(key, n_sim: int, *, plot_losses: bool = True):
 
     optimizer = optax.apply_if_finite(
         optax.chain(
-            optax.clip_by_global_norm(1),
+            optax.clip_by_global_norm(5),
             optax.adam(optax.linear_schedule(1e-4, 5e-5, 2000)),
         ),
         max_consecutive_errors=100,
@@ -50,7 +51,7 @@ def main(key, n_sim: int, *, plot_losses: bool = True):
         condition=simulations["z"],
         max_epochs=600,
         optimizer=optimizer,
-        max_patience=10,
+        max_patience=30,
     )
     eqx.tree_serialise_leaves(
         path_or_file=f"{sirsde.get_surrogate_path()}/surrogate.eqx",

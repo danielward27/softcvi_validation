@@ -106,11 +106,12 @@ class SIRSDEModel(AbstractNumpyroModel):
     z: Callable
     likelihood: AbstractDistribution
     reparameterized: bool | None
-    n_obs = 50
+    n_obs: int
     reparam_names = {"loc", "scale", "z"}
     observed_names = {"x"}
 
-    def __init__(self, *, use_surrogate: bool = True):
+    def __init__(self, *, use_surrogate: bool = True, n_obs: int = 50):
+
         if use_surrogate:
             self.likelihood = get_surrogate()
             # As surrogate is trained on scaled z space we transform the prior to match
@@ -122,7 +123,7 @@ class SIRSDEModel(AbstractNumpyroModel):
         else:
             self.likelihood = SIRSDESimulator()
             self.z = LogNormal
-
+        self.n_obs = n_obs
         self.loc = Normal(jnp.full(self.likelihood.cond_shape, -2))
         self.scale = LogNormal(-1, scale=jnp.full(self.likelihood.cond_shape, 0.3))
         self.reparameterized = None
