@@ -17,12 +17,11 @@ with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.bearty
 
     from cnpe_validation.tasks.eight_schools import EightSchoolsTask
     from cnpe_validation.tasks.multimodal_gaussian import (
-        MultimodelGaussianMisspecifiedGuideTask,
-        MultimodelGaussianWellSpecifiedGuideTask,
+        MultimodelGaussianFlexibleTask,
+        MultimodelGaussianInflexibleTask,
     )
     from cnpe_validation.tasks.sirsde import SIRSDETask
-    from cnpe_validation.tasks.tasks import AbstractTaskWithReference
-    from cnpe_validation.tasks.two_moons import TwoMoonsTask
+    from cnpe_validation.tasks.slcp import SLCPTask
     from cnpe_validation.utils import get_abspath_project_root
 
 os.chdir(get_abspath_project_root())
@@ -32,9 +31,9 @@ TASKS = {
     for t in [
         SIRSDETask,
         EightSchoolsTask,
-        TwoMoonsTask,
-        MultimodelGaussianMisspecifiedGuideTask,
-        MultimodelGaussianWellSpecifiedGuideTask,
+        SLCPTask,
+        MultimodelGaussianInflexibleTask,
+        MultimodelGaussianFlexibleTask,
     ]
 }
 
@@ -110,6 +109,7 @@ def main(
             optimizer=optimizer,
         )
 
+    @eqx.filter_vmap
     def compute_true_latent_prob(true_latents):  # For a single latent
         log_probs = {
             k: posterior.log_prob_original_space(
@@ -123,9 +123,6 @@ def main(
             true_latents,
         )
         return log_probs
-
-    if isinstance(task, AbstractTaskWithReference):  # Batch of "true" samples
-        compute_true_latent_prob = eqx.filter_vmap(compute_true_latent_prob)
 
     log_prob_true = compute_true_latent_prob(true_latents)
     results_dir = f"{os.getcwd()}/results/{task.name}/"

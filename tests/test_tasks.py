@@ -5,14 +5,18 @@ from numpyro.util import check_model_guide_match
 
 from cnpe_validation.tasks.eight_schools import EightSchoolsTask
 from cnpe_validation.tasks.multimodal_gaussian import (
-    MultimodelGaussianMisspecifiedGuideTask,
+    MultimodelGaussianFlexibleTask,
+    MultimodelGaussianInflexibleTask,
 )
 from cnpe_validation.tasks.sirsde import SIRSDETask
+from cnpe_validation.tasks.slcp import SLCPTask
 
 test_cases = [
     EightSchoolsTask,
-    MultimodelGaussianMisspecifiedGuideTask,
+    MultimodelGaussianFlexibleTask,
+    MultimodelGaussianInflexibleTask,
     SIRSDETask,
+    SLCPTask,
 ]
 
 

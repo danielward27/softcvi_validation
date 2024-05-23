@@ -20,10 +20,7 @@ from jax import Array
 from jaxtyping import Array, Float, PRNGKeyArray, ScalarLike
 from numpyro import plate
 
-from cnpe_validation.tasks.tasks import (
-    AbstractTaskWithReference,
-    get_posterior_db_reference_posterior,
-)
+from cnpe_validation.tasks.tasks import AbstractTaskWithFileReference
 from cnpe_validation.utils import Folded, MLPParameterizedDistribution
 
 
@@ -61,16 +58,13 @@ class EightSchoolsModel(AbstractNumpyroModel):
         self,
         obs: dict[str, Float[Array, " 8"]] | None = None,
     ):
+        obs = obs["y"] if obs is not None else None
         mu = sample("mu", Normal(0, 5))
         tau = sample("tau", get_folded_distribution(Cauchy, loc=0, scale=5))
 
         with plate("num_schools", self.num_schools):
             theta = sample("theta", Normal(mu, tau))
-        sample(
-            "y",
-            Normal(theta, self.sigma),
-            obs=obs["y"] if obs is not None else None,
-        )
+        sample("y", Normal(theta, self.sigma), obs=obs)
 
 
 class EightSchoolsGuide(AbstractNumpyroGuide):
@@ -117,24 +111,11 @@ class EightSchoolsGuide(AbstractNumpyroGuide):
             sample("theta_base", self.theta_base, condition=obs)
 
 
-class EightSchoolsTask(AbstractTaskWithReference):
+class EightSchoolsTask(AbstractTaskWithFileReference):
     model: EightSchoolsModel
     guide: EightSchoolsGuide
     name = "eight_schools"
-    posterior_db_name = "eight_schools-eight_schools_noncentered"
 
     def __init__(self, key: PRNGKeyArray):
         self.model = EightSchoolsModel()
         self.guide = EightSchoolsGuide(key, width_size=50)
-
-    def get_latents_and_observed(
-        self,
-        key: PRNGKeyArray | None = None,
-    ) -> tuple[dict[str, Array], dict[str, Array]]:
-        """Get the observations and a reference posterior from posteriordb.
-
-        Key is ignored, but provided for consistency of API.
-        """
-        latents = get_posterior_db_reference_posterior(self.posterior_db_name)
-        obs = {"y": jnp.array([28, 8, -3, 7, -1, 1, 18, 12], dtype=float)}
-        return latents, obs
