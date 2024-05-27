@@ -6,8 +6,8 @@ from flowjax.distributions import AbstractDistribution, Normal, Uniform, VmapMix
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray, Scalar
 
+from cnpe_validation.distributions import MLPParameterizedDistribution, TruncNormal
 from cnpe_validation.tasks.tasks import AbstractTask
-from cnpe_validation.utils import MLPParameterizedDistribution, TruncNormal
 
 
 class MultimodalGaussianModel(AbstractNumpyroModel):
@@ -72,7 +72,7 @@ class MultimodalGaussianFlexibleGuide(AbstractNumpyroGuide):
             eqx.filter_vmap(TruncNormal)(
                 *MultimodalGaussianModel.interval,
                 jnp.zeros(2),
-                0.2,
+                10,
             ),
             weights=jnp.ones(2),
         )

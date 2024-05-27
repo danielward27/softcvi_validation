@@ -33,8 +33,8 @@ from jax import Array
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from cnpe_validation import constraints
+from cnpe_validation.distributions import MLPParameterizedDistribution
 from cnpe_validation.tasks.tasks import AbstractTaskWithoutReference
-from cnpe_validation.utils import MLPParameterizedDistribution
 
 
 def infer_processors(z, x):

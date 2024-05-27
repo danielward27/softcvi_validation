@@ -3,24 +3,10 @@ import pytest
 from cnpe.numpyro_utils import shape_only_trace
 from numpyro.util import check_model_guide_match
 
-from cnpe_validation.tasks.eight_schools import EightSchoolsTask
-from cnpe_validation.tasks.multimodal_gaussian import (
-    MultimodelGaussianFlexibleTask,
-    MultimodelGaussianInflexibleTask,
-)
-from cnpe_validation.tasks.sirsde import SIRSDETask
-from cnpe_validation.tasks.slcp import SLCPTask
-
-test_cases = [
-    EightSchoolsTask,
-    MultimodelGaussianFlexibleTask,
-    MultimodelGaussianInflexibleTask,
-    SIRSDETask,
-    SLCPTask,
-]
+from cnpe_validation.tasks.available_tasks import get_available_tasks
 
 
-@pytest.mark.parametrize("task", test_cases)
+@pytest.mark.parametrize("task", get_available_tasks().values())
 def test_tasks(task):
     key = jr.PRNGKey(0)
     task = task(key)

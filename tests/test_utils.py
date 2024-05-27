@@ -4,7 +4,7 @@ import pytest
 from flowjax.distributions import Normal
 from jax.scipy import integrate
 
-from cnpe_validation.utils import Folded, TruncNormal
+from cnpe_validation.distributions import Folded, TruncNormal
 
 
 def test_folded():

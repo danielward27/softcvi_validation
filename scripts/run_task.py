@@ -1,41 +1,26 @@
 import argparse
 import os
 
-import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
-    from cnpe.losses import (
-        AmortizedMaximumLikelihood,
-        ContrastiveLoss,
-        NegativeEvidenceLowerBound,
-    )
+    from cnpe import losses
     from cnpe.train import train
 
-    from cnpe_validation.tasks.eight_schools import EightSchoolsTask
-    from cnpe_validation.tasks.multimodal_gaussian import (
-        MultimodelGaussianFlexibleTask,
-        MultimodelGaussianInflexibleTask,
-    )
-    from cnpe_validation.tasks.sirsde import SIRSDETask
-    from cnpe_validation.tasks.slcp import SLCPTask
-    from cnpe_validation.utils import get_abspath_project_root
+    from cnpe_validation import utils
 
-os.chdir(get_abspath_project_root())
 
-TASKS = {
-    t.name: t
-    for t in [
-        SIRSDETask,
-        EightSchoolsTask,
-        SLCPTask,
-        MultimodelGaussianInflexibleTask,
-        MultimodelGaussianFlexibleTask,
-    ]
-}
+from cnpe.models import AbstractNumpyroGuide
+from jaxtyping import Array, PRNGKeyArray
+
+from cnpe_validation import metrics
+from cnpe_validation.tasks.available_tasks import get_available_tasks
+from cnpe_validation.tasks.tasks import AbstractTask
+
+os.chdir(utils.get_abspath_project_root())
 
 
 def main(
@@ -48,24 +33,23 @@ def main(
 ):
 
     key, subkey = jr.split(jr.PRNGKey(seed))
-    task = TASKS[task_name](subkey)
+    task = get_available_tasks()[task_name](subkey)
 
     key, subkey = jr.split(key)
-    obs, true_latents = task.get_latents_and_observed_and_validate(subkey)
+    true_latents, obs = task.get_latents_and_observed_and_validate(subkey)
     posteriors = {}
-    losses = {}
+    loss_vals = {}
 
     optimizer = optax.apply_if_finite(
         optax.adam(optax.linear_schedule(1e-3, 1e-4, maximum_likelihood_steps)),
         max_consecutive_errors=100,
     )
-
     # Train using VI
-    method_name = "evidence lower bound"
-    loss = NegativeEvidenceLowerBound(task.model.reparam(set_val=True), obs=obs)
+    method_name = "ELBO"
+    loss = losses.NegativeEvidenceLowerBound(task.model.reparam(set_val=True), obs=obs)
 
     key, subkey = jr.split(key)
-    posteriors[method_name], losses[method_name] = train(
+    posteriors[method_name], loss_vals[method_name] = train(
         subkey,
         guide=task.guide,
         loss_fn=loss,
@@ -74,10 +58,10 @@ def main(
     )
 
     # Train using maximum likelihood
-    method_name = "maximum likelihood"
-    loss = AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
+    method_name = "Maximum likelihood"
+    loss = losses.AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
 
-    posteriors[method_name], losses[method_name] = train(
+    posteriors[method_name], loss_vals[method_name] = train(
         subkey,
         guide=task.guide,
         loss_fn=loss,
@@ -87,9 +71,9 @@ def main(
 
     # Fine tune with contrastive loss
     for stop_grad in [False, True]:
-        method_name = f"npe-pp (stop grad={stop_grad})"
+        method_name = f"NPE-PP (stop grad={stop_grad})"
 
-        loss = ContrastiveLoss(
+        loss = losses.ContrastiveLoss(
             model=task.model.reparam(),
             obs=obs,
             n_contrastive=num_contrastive,
@@ -101,33 +85,62 @@ def main(
             max_consecutive_errors=100,
         )
         key, subkey = jr.split(key)
-        posteriors[method_name], losses[method_name] = train(
+        posteriors[method_name], loss_vals[method_name] = train(
             subkey,
-            guide=posteriors["maximum likelihood"],
+            guide=posteriors["Maximum likelihood"],
             loss_fn=loss,
             steps=contrastive_steps,
             optimizer=optimizer,
         )
 
-    @eqx.filter_vmap
-    def compute_true_latent_prob(true_latents):  # For a single latent
-        log_probs = {
-            k: posterior.log_prob_original_space(
-                latents=true_latents,
-                model=task.model,
-                obs=obs,
-            )
-            for k, posterior in posteriors.items()
-        }
-        log_probs["prior"] = task.model.reparam(set_val=False).prior_log_prob(
-            true_latents,
+    posterior_metrics = {
+        k: compute_metrics(
+            key,
+            task=task,
+            guide=guide,
+            obs=obs,
+            reference_samples=true_latents,
         )
-        return log_probs
+        for k, guide in posteriors.items()
+    }
 
-    log_prob_true = compute_true_latent_prob(true_latents)
     results_dir = f"{os.getcwd()}/results/{task.name}/"
-    jnp.savez(results_dir + f"true_posterior_log_probs_{seed}.npz", **log_prob_true)
-    jnp.savez(results_dir + f"losses_{seed}.npz", **losses)
+    for posterior_name, results in posterior_metrics.items():
+        jnp.savez(f"{results_dir}{posterior_name}_{seed}.npz", **results)
+        jnp.savez(f"{results_dir}losses_{seed}.npz", **loss_vals)
+
+
+def compute_metrics(
+    key: PRNGKeyArray,
+    *,
+    task: AbstractTask,
+    guide: AbstractNumpyroGuide,
+    obs: dict,
+    reference_samples: dict[str, Array],
+):
+    key1, key2 = jr.split(key)
+    return {
+        "mean_log_prob_reference": metrics.mean_log_prob_reference(
+            model=task.model,
+            guide=guide,
+            obs=obs,
+            reference_samples=reference_samples,
+        ),
+        "coverage_probabilities": metrics.coverage_probabilities(
+            key1,
+            model=task.model,
+            guide=guide,
+            obs=obs,
+            reference_samples=reference_samples,
+        ),
+        "posterior_mean_l2": metrics.posterior_mean_l2(
+            key2,
+            task=task,
+            guide=guide,
+            obs=obs,
+            reference_samples=reference_samples,
+        ),
+    }
 
 
 if __name__ == "__main__":
@@ -135,9 +148,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="NPE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--maximum-likelihood-steps", type=int, default=4000)
-    parser.add_argument("--contrastive-steps", type=int, default=2000)
-    parser.add_argument("--num-contrastive", type=int, default=20)
+    parser.add_argument("--maximum-likelihood-steps", type=int, default=100)
+    parser.add_argument("--contrastive-steps", type=int, default=100)
+    parser.add_argument("--num-contrastive", type=int, default=100)
     args = parser.parse_args()
 
     main(

@@ -20,8 +20,8 @@ from jax import Array
 from jaxtyping import Array, Float, PRNGKeyArray, ScalarLike
 from numpyro import plate
 
+from cnpe_validation.distributions import Folded, MLPParameterizedDistribution
 from cnpe_validation.tasks.tasks import AbstractTaskWithFileReference
-from cnpe_validation.utils import Folded, MLPParameterizedDistribution
 
 
 def get_folded_distribution(

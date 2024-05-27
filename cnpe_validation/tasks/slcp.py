@@ -12,8 +12,8 @@ from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from cnpe_validation.distributions import UniformWithLogisticBase
 from cnpe_validation.tasks.tasks import AbstractTaskWithFileReference
-from cnpe_validation.utils import UniformWithLogisticBase, get_abspath_project_root
 
 
 class SLCPModel(AbstractNumpyroModel):

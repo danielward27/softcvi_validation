@@ -3,18 +3,21 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
-from jaxtyping import Array, PRNGKeyArray
+from jax.flatten_util import ravel_pytree
+from jaxtyping import Array, Float, PRNGKeyArray
+
+from cnpe_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
 
 
-def coverage_probability(
+def coverage_probabilities(
     key: PRNGKeyArray,
     *,
     model: AbstractNumpyroModel,
     guide: AbstractNumpyroGuide,
     obs: dict,
-    reference_samples: dict,
-    n_guide_samps: int = 5000,
-    nominal_percentiles: Array | None = None,
+    reference_samples: dict[str, Array],
+    n_samps: int = 5000,
+    nominal_percentiles: Float[Array, " n"] | None = None,
 ):
     """Compute the coverage probabilties given a guide and a set of reference samples.
 
@@ -36,9 +39,6 @@ def coverage_probability(
     if nominal_percentiles is None:
         nominal_percentiles = jnp.linspace(0, 100, 100)
 
-    def _map_wrapper(f):  # Use map instead of vmap to limit memory usage
-        return lambda xs: jax.lax.map(f, xs)
-
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
@@ -51,7 +51,7 @@ def coverage_probability(
         return guide.log_prob_original_space(latents, model, obs=obs)
 
     key, subkey = jr.split(key)
-    guide_samples = sample_guide_original_space(jr.split(subkey, n_guide_samps))
+    guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
     guide_log_probs = jnp.sort(log_prob_original_space(guide_samples))
     ref_log_probs = log_prob_original_space(reference_samples)
 
@@ -67,3 +67,62 @@ def coverage_probability(
         return (percentile >= smallest_required_nominal).mean()
 
     return eqx.filter_vmap(_coverage_frequency)(nominal_percentiles)
+
+
+def posterior_mean_l2(
+    key: PRNGKeyArray,
+    *,
+    task: AbstractTask,
+    guide: AbstractNumpyroGuide,
+    obs: dict,
+    reference_samples: dict[str, Array],
+    n_samps: int = 5000,
+):
+
+    @eqx.filter_vmap
+    def _to_matrix(samples: dict):
+        return ravel_pytree(samples)[0]
+
+    @eqx.filter_jit
+    @_map_wrapper
+    def sample_guide_original_space(key):
+        guide_samp = guide.sample(key, obs=obs)
+        return task.model.latents_to_original_space(guide_samp, obs=obs)
+
+    key, subkey = jr.split(key)
+    guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
+    guide_samples = _to_matrix(guide_samples)
+    reference_samples = _to_matrix(reference_samples)
+
+    # Get an estimate of parameter scales
+    if isinstance(task, AbstractTaskWithoutReference):
+        # Prior scales if no reference
+        key, subkey = jr.split(key)
+        prior_samples = _map_wrapper(task.model.reparam(set_val=False).sample_prior)(
+            jr.split(key, n_samps),
+        )
+        prior_samples = _to_matrix(prior_samples)
+        scales = jnp.std(prior_samples, axis=0)
+    else:
+        scales = jnp.std(reference_samples, axis=0)
+
+    guide_samples = guide_samples / scales
+    reference_samples = reference_samples / scales
+    return jnp.linalg.norm(guide_samples.mean(axis=0) - reference_samples.mean(axis=0))
+
+
+def mean_log_prob_reference(
+    model: AbstractNumpyroModel,
+    guide: AbstractNumpyroGuide,
+    obs: dict[str, Array],
+    reference_samples: dict[str, Array],
+):
+    @_map_wrapper
+    def _log_prob(samps):
+        return guide.log_prob_original_space(samps, model=model, obs=obs)
+
+    return _log_prob(reference_samples).mean()
+
+
+def _map_wrapper(f):  # We use map instead of vmap just incase memory would be an issue
+    return lambda xs: jax.lax.map(f, xs)
