@@ -29,6 +29,7 @@ def main(
     task_name: str,
     maximum_likelihood_steps: int,
     contrastive_steps: int,
+    elbo_steps: int,
     num_contrastive: int,
 ):
 
@@ -53,7 +54,7 @@ def main(
         subkey,
         guide=task.guide,
         loss_fn=loss,
-        steps=maximum_likelihood_steps,
+        steps=elbo_steps,
         optimizer=optimizer,
     )
 
@@ -69,21 +70,25 @@ def main(
         optimizer=optimizer,
     )
 
+    optimizer = optax.apply_if_finite(
+        optax.chain(
+            optax.clip_by_global_norm(4.0),
+            optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
+        ),
+        max_consecutive_errors=100,
+    )
+
     # Fine tune with contrastive loss
-    for stop_grad in [False, True]:
-        method_name = f"NPE-PP (stop grad={stop_grad})"
+    for reparameterized_sampling in [True, False]:
+        method_name = f"NPE-PP (reparameterized sampling={reparameterized_sampling})"
 
         loss = losses.ContrastiveLoss(
             model=task.model.reparam(),
             obs=obs,
             n_contrastive=num_contrastive,
-            stop_grad_for_contrastive_sampling=stop_grad,
+            reparameterized_sampling=reparameterized_sampling,
         )
 
-        optimizer = optax.apply_if_finite(
-            optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
-            max_consecutive_errors=100,
-        )
         key, subkey = jr.split(key)
         posteriors[method_name], loss_vals[method_name] = train(
             subkey,
@@ -92,6 +97,23 @@ def main(
             steps=contrastive_steps,
             optimizer=optimizer,
         )
+
+    method_name = "NPE-PP (fixed proposal)"
+    loss = losses.ContrastiveLoss(
+        model=task.model.reparam(),
+        obs=obs,
+        n_contrastive=num_contrastive,
+        fixed_proposal=posteriors["Maximum likelihood"],
+    )
+
+    key, subkey = jr.split(key)
+    posteriors[method_name], loss_vals[method_name] = train(
+        subkey,
+        guide=posteriors["Maximum likelihood"],
+        loss_fn=loss,
+        steps=contrastive_steps,
+        optimizer=optimizer,
+    )
 
     posterior_metrics = {
         k: compute_metrics(
@@ -148,9 +170,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="NPE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--maximum-likelihood-steps", type=int, default=100)
-    parser.add_argument("--contrastive-steps", type=int, default=100)
-    parser.add_argument("--num-contrastive", type=int, default=100)
+    parser.add_argument("--maximum-likelihood-steps", type=int, default=20000)
+    parser.add_argument("--contrastive-steps", type=int, default=10000)
+    parser.add_argument("--elbo-steps", type=int, default=40000)
+    parser.add_argument("--num-contrastive", type=int, default=5)
     args = parser.parse_args()
 
     main(
@@ -158,5 +181,6 @@ if __name__ == "__main__":
         task_name=args.task_name,
         maximum_likelihood_steps=args.maximum_likelihood_steps,
         contrastive_steps=args.contrastive_steps,
+        elbo_steps=args.elbo_steps,
         num_contrastive=args.num_contrastive,
     )

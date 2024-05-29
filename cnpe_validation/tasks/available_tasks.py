@@ -12,7 +12,7 @@ def get_available_tasks():
         SIRSDETask,
         EightSchoolsTask,
         SLCPTask,
-        MultimodelGaussianInflexibleTask,
         MultimodelGaussianFlexibleTask,
+        MultimodelGaussianInflexibleTask,
     ]
     return {t.name: t for t in task_list}

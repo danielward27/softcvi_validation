@@ -72,7 +72,7 @@ class MultimodalGaussianFlexibleGuide(AbstractNumpyroGuide):
             eqx.filter_vmap(TruncNormal)(
                 *MultimodalGaussianModel.interval,
                 jnp.zeros(2),
-                10,
+                0.2,
             ),
             weights=jnp.ones(2),
         )
