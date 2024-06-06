@@ -9,8 +9,8 @@ dependencies = [
     "beartype",
     "requests", # TODO remove if I instead use python posteriordb interface
 ]
-description = "Experiments for cnpe package."
-name = "cnpe_validation"
+description = "Experiments for cpe package."
+name = "cpe_validation"
 readme = "README.md"
 requires-python = ">=3.11"
 version = "0.0.0"
@@ -22,7 +22,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--jaxtyping-packages=cnpe,cnpe_validation,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
+addopts = "--jaxtyping-packages=cpe,cpe_validation,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
 
 
 [tool.ruff]
@@ -39,4 +39,4 @@ convention = "google"
 "__init__.py" = ["D"]
 
 [tool.setuptools]
-packages = ["cnpe_validation"]
+packages = ["cpe_validation"]

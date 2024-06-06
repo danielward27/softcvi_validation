@@ -2,18 +2,18 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
+from cpe.models import AbstractGuide, AbstractModel
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from cnpe_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
+from cpe_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
 
 
 def coverage_probabilities(
     key: PRNGKeyArray,
     *,
-    model: AbstractNumpyroModel,
-    guide: AbstractNumpyroGuide,
+    model: AbstractModel,
+    guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
@@ -42,7 +42,7 @@ def coverage_probabilities(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
+        guide_samp = guide.sample(key)
         return model.latents_to_original_space(guide_samp, obs=obs)
 
     @eqx.filter_jit
@@ -73,7 +73,7 @@ def posterior_mean_l2(
     key: PRNGKeyArray,
     *,
     task: AbstractTask,
-    guide: AbstractNumpyroGuide,
+    guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
@@ -86,7 +86,7 @@ def posterior_mean_l2(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
+        guide_samp = guide.sample(key)
         return task.model.latents_to_original_space(guide_samp, obs=obs)
 
     key, subkey = jr.split(key)
@@ -112,8 +112,8 @@ def posterior_mean_l2(
 
 
 def mean_log_prob_reference(
-    model: AbstractNumpyroModel,
-    guide: AbstractNumpyroGuide,
+    model: AbstractModel,
+    guide: AbstractGuide,
     obs: dict[str, Array],
     reference_samples: dict[str, Array],
 ):

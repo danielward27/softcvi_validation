@@ -7,31 +7,44 @@ import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
-    from cnpe import losses
-    from cnpe.train import train
+    from cpe import losses
+    from cpe.train import train
 
-    from cnpe_validation import utils
+    from cpe_validation import utils
 
 
-from cnpe.models import AbstractNumpyroGuide
+from time import time
+
+import optax
+from cpe.models import AbstractGuide
 from jaxtyping import Array, PRNGKeyArray
 
-from cnpe_validation import metrics
-from cnpe_validation.tasks.available_tasks import get_available_tasks
-from cnpe_validation.tasks.tasks import AbstractTask
+from cpe_validation import metrics
+from cpe_validation.tasks.available_tasks import get_available_tasks
+from cpe_validation.tasks.tasks import AbstractTask
 
 os.chdir(utils.get_abspath_project_root())
+
+
+def time_wrapper(fn):
+    """Wrap a function to return runtime."""
+
+    def wrapped(*args, **kwargs):
+        start = time()
+        result = fn(*args, **kwargs)
+        end = time()
+        return result, end - start
+
+    return wrapped
 
 
 def main(
     *,
     seed: int,
     task_name: str,
-    maximum_likelihood_steps: int,
-    contrastive_steps: int,
-    elbo_steps: int,
-    num_contrastive: int,
+    steps: int,
 ):
+    train_fn = time_wrapper(train)
 
     key, subkey = jr.split(jr.PRNGKey(seed))
     task = get_available_tasks()[task_name](subkey)
@@ -40,80 +53,40 @@ def main(
     true_latents, obs = task.get_latents_and_observed_and_validate(subkey)
     posteriors = {}
     loss_vals = {}
-
-    optimizer = optax.apply_if_finite(
-        optax.adam(optax.linear_schedule(1e-3, 1e-4, maximum_likelihood_steps)),
-        max_consecutive_errors=100,
-    )
-    # Train using VI
-    method_name = "ELBO"
-    loss = losses.NegativeEvidenceLowerBound(task.model.reparam(set_val=True), obs=obs)
-
-    key, subkey = jr.split(key)
-    posteriors[method_name], loss_vals[method_name] = train(
-        subkey,
-        guide=task.guide,
-        loss_fn=loss,
-        steps=elbo_steps,
-        optimizer=optimizer,
-    )
-
-    # Train using maximum likelihood
-    method_name = "Maximum likelihood"
-    loss = losses.AmortizedMaximumLikelihood(task.model.reparam(set_val=True))
-
-    posteriors[method_name], loss_vals[method_name] = train(
-        subkey,
-        guide=task.guide,
-        loss_fn=loss,
-        steps=maximum_likelihood_steps,
-        optimizer=optimizer,
-    )
+    run_times = {}
 
     optimizer = optax.apply_if_finite(
         optax.chain(
-            optax.clip_by_global_norm(4.0),
-            optax.adam(optax.linear_schedule(1e-4, 1e-5, contrastive_steps)),
+            optax.clip_by_global_norm(10.0),
+            optax.adam(optax.linear_schedule(1e-3, 1e-4, steps)),
         ),
         max_consecutive_errors=100,
     )
 
-    # Fine tune with contrastive loss
-    for reparameterized_sampling in [True, False]:
-        method_name = f"NPE-PP (reparameterized sampling={reparameterized_sampling})"
-
-        loss = losses.ContrastiveLoss(
-            model=task.model.reparam(),
+    loss_choices = {
+        "ELBO": losses.NegativeEvidenceLowerBound(
+            model=task.model.reparam(set_val=True),
             obs=obs,
-            n_contrastive=num_contrastive,
-            reparameterized_sampling=reparameterized_sampling,
-        )
-
-        key, subkey = jr.split(key)
-        posteriors[method_name], loss_vals[method_name] = train(
-            subkey,
-            guide=posteriors["Maximum likelihood"],
-            loss_fn=loss,
-            steps=contrastive_steps,
-            optimizer=optimizer,
-        )
-
-    method_name = "NPE-PP (fixed proposal)"
-    loss = losses.ContrastiveLoss(
-        model=task.model.reparam(),
-        obs=obs,
-        n_contrastive=num_contrastive,
-        fixed_proposal=posteriors["Maximum likelihood"],
-    )
+            n_particles=20,
+        ),
+        "SoftCE": losses.SoftContrastiveEstimationLoss(
+            model=task.model.reparam(set_val=True),
+            obs=obs,
+            n_particles=10,
+        ),
+    }
 
     key, subkey = jr.split(key)
-    posteriors[method_name], loss_vals[method_name] = train(
-        subkey,
-        guide=posteriors["Maximum likelihood"],
-        loss_fn=loss,
-        steps=contrastive_steps,
-        optimizer=optimizer,
-    )
+
+    for loss_name, loss in loss_choices.items():
+
+        (posteriors[loss_name], loss_vals[loss_name]), run_times[loss_name] = train_fn(
+            subkey,
+            guide=task.guide,
+            loss_fn=loss,
+            steps=steps,
+            optimizer=optimizer,
+        )
 
     posterior_metrics = {
         k: compute_metrics(
@@ -130,13 +103,14 @@ def main(
     for posterior_name, results in posterior_metrics.items():
         jnp.savez(f"{results_dir}{posterior_name}_{seed}.npz", **results)
         jnp.savez(f"{results_dir}losses_{seed}.npz", **loss_vals)
+        jnp.savez(f"{results_dir}run_times_{seed}.npz", **run_times)
 
 
 def compute_metrics(
     key: PRNGKeyArray,
     *,
     task: AbstractTask,
-    guide: AbstractNumpyroGuide,
+    guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
 ):
@@ -167,20 +141,14 @@ def compute_metrics(
 
 if __name__ == "__main__":
     # python -m scripts.run_task --seed=0 --task-name="eight_schools"
-    parser = argparse.ArgumentParser(description="NPE")
+    parser = argparse.ArgumentParser(description="SoftCE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--maximum-likelihood-steps", type=int, default=20000)
-    parser.add_argument("--contrastive-steps", type=int, default=10000)
-    parser.add_argument("--elbo-steps", type=int, default=40000)
-    parser.add_argument("--num-contrastive", type=int, default=5)
+    parser.add_argument("--steps", type=int, default=50000)
     args = parser.parse_args()
 
     main(
         seed=args.seed,
         task_name=args.task_name,
-        maximum_likelihood_steps=args.maximum_likelihood_steps,
-        contrastive_steps=args.contrastive_steps,
-        elbo_steps=args.elbo_steps,
-        num_contrastive=args.num_contrastive,
+        steps=args.steps,
     )

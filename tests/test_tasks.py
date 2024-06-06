@@ -1,9 +1,9 @@
 import jax.random as jr
 import pytest
-from cnpe.numpyro_utils import shape_only_trace
+from cpe.numpyro_utils import shape_only_trace
 from numpyro.util import check_model_guide_match
 
-from cnpe_validation.tasks.available_tasks import get_available_tasks
+from cpe_validation.tasks.available_tasks import get_available_tasks
 
 
 @pytest.mark.parametrize("task", get_available_tasks().values())

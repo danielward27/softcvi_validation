@@ -1,16 +1,16 @@
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
-from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
+from cpe.models import AbstractGuide, AbstractModel
 from flowjax.distributions import AbstractDistribution, Normal, Uniform, VmapMixture
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray, Scalar
 
-from cnpe_validation.distributions import MLPParameterizedDistribution, TruncNormal
-from cnpe_validation.tasks.tasks import AbstractTask
+from cpe_validation.distributions import TruncNormal
+from cpe_validation.tasks.tasks import AbstractTask
 
 
-class MultimodalGaussianModel(AbstractNumpyroModel):
+class MultimodalGaussianModel(AbstractModel):
     """A task with a truncated bimodal gaussian posterior.
 
     The task is to infer a single parameter mu, given a sample from N(|mu|, scale^2).
@@ -39,52 +39,35 @@ class MultimodalGaussianModel(AbstractNumpyroModel):
         )
 
 
-class MultimodalGaussianInflexibleGuide(AbstractNumpyroGuide):
+class MultimodalGaussianInflexibleGuide(AbstractGuide):
     """Guide that is not multimodal - single truncated normal."""
 
     mu: AbstractDistribution
 
-    def __init__(
-        self,
-        key: PRNGKeyArray,
-    ):
-        self.mu = MLPParameterizedDistribution(
-            key,
-            TruncNormal(*MultimodalGaussianModel.interval, scale=0.2),
-            cond_dim="scalar",
-            width_size=10,
-        )
+    def __init__(self):
+        self.mu = TruncNormal(*MultimodalGaussianModel.interval, scale=0.5)
 
-    def __call__(self, obs: dict[str, Float[Array, ""]]):
-        sample("mu", self.mu, condition=obs["x"])
+    def __call__(self):
+        sample("mu", self.mu)
 
 
-class MultimodalGaussianFlexibleGuide(AbstractNumpyroGuide):
+class MultimodalGaussianFlexibleGuide(AbstractGuide):
     """Guide that is multimodal - two truncated normals."""
 
     mu: AbstractDistribution
 
-    def __init__(
-        self,
-        key: PRNGKeyArray,
-    ):
-        truncnorm_mixture = VmapMixture(
+    def __init__(self):
+        self.mu = VmapMixture(
             eqx.filter_vmap(TruncNormal)(
                 *MultimodalGaussianModel.interval,
-                jnp.zeros(2),
-                0.2,
+                jnp.array([-0.1, 0.1]),  # symmetry braking
+                0.5,
             ),
             weights=jnp.ones(2),
         )
-        self.mu = MLPParameterizedDistribution(
-            key,
-            truncnorm_mixture,
-            cond_dim="scalar",
-            width_size=10,
-        )
 
-    def __call__(self, obs: dict[str, Float[Array, ""]]):
-        sample("mu", self.mu, condition=obs["x"])
+    def __call__(self):
+        sample("mu", self.mu)
 
 
 class _AbstractMultimodalGaussianTask(AbstractTask):
@@ -94,7 +77,8 @@ class _AbstractMultimodalGaussianTask(AbstractTask):
         key: PRNGKeyArray,
     ) -> tuple[dict[str, Array], dict[str, Array]]:
         obs_key, posterior_key = jr.split(key)
-        _, obs = self.model.reparam(set_val=False).sample_joint(obs_key)
+        obs = self.model.reparam(set_val=False).sample(obs_key)
+        obs = {k: obs[k] for k in self.model.observed_names}
 
         posterior = self.model.get_true_posterior(obs)
         latents = posterior.sample(posterior_key, (10000,))
@@ -111,9 +95,10 @@ class MultimodelGaussianInflexibleTask(_AbstractMultimodalGaussianTask):
     guide: MultimodalGaussianInflexibleGuide
     name = "multimodal_gaussian_inflexible"
 
-    def __init__(self, key: PRNGKeyArray):
+    def __init__(self, key=None):
+        # Key accepted for consistency of API
         self.model = MultimodalGaussianModel()
-        self.guide = MultimodalGaussianInflexibleGuide(key)
+        self.guide = MultimodalGaussianInflexibleGuide()
 
 
 class MultimodelGaussianFlexibleTask(_AbstractMultimodalGaussianTask):
@@ -126,6 +111,7 @@ class MultimodelGaussianFlexibleTask(_AbstractMultimodalGaussianTask):
     guide: MultimodalGaussianFlexibleGuide
     name = "multimodal_gaussian_flexible"
 
-    def __init__(self, key: PRNGKeyArray):
+    def __init__(self, key=None):
+        # Key accepted for consistency of API
         self.model = MultimodalGaussianModel()
-        self.guide = MultimodalGaussianFlexibleGuide(key)
+        self.guide = MultimodalGaussianFlexibleGuide()

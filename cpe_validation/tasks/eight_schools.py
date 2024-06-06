@@ -2,8 +2,7 @@ from typing import ClassVar
 
 import equinox as eqx
 import jax.numpy as jnp
-import jax.random as jr
-from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
+from cpe.models import AbstractGuide, AbstractModel
 from flowjax.bijections import Scale
 from flowjax.distributions import (
     AbstractDistribution,
@@ -17,11 +16,10 @@ from flowjax.experimental.numpyro import sample
 from flowjax.utils import arraylike_to_array
 from flowjax.wrappers import NonTrainable
 from jax import Array
-from jaxtyping import Array, Float, PRNGKeyArray, ScalarLike
-from numpyro import plate
+from jaxtyping import Float, ScalarLike
 
-from cnpe_validation.distributions import Folded, MLPParameterizedDistribution
-from cnpe_validation.tasks.tasks import AbstractTaskWithFileReference
+from cpe_validation.distributions import Folded
+from cpe_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 def get_folded_distribution(
@@ -45,7 +43,7 @@ def get_folded_distribution(
     return Transformed(Folded(dist), Scale(scale))
 
 
-class EightSchoolsModel(AbstractNumpyroModel):
+class EightSchoolsModel(AbstractModel):
     """Eight schools model."""
 
     reparameterized: bool | None = None
@@ -61,54 +59,26 @@ class EightSchoolsModel(AbstractNumpyroModel):
         obs = obs["y"] if obs is not None else None
         mu = sample("mu", Normal(0, 5))
         tau = sample("tau", get_folded_distribution(Cauchy, loc=0, scale=5))
-
-        with plate("num_schools", self.num_schools):
-            theta = sample("theta", Normal(mu, tau))
+        theta = sample("theta", Normal(jnp.full((8,), mu), tau))
         sample("y", Normal(theta, self.sigma), obs=obs)
 
 
-class EightSchoolsGuide(AbstractNumpyroGuide):
+class EightSchoolsGuide(AbstractGuide):
     """Eight schools guide using MLPs to parameterize simple distributions."""
 
     theta_base: AbstractDistribution
     mu_base: AbstractDistribution
     tau_base: AbstractDistribution
 
-    def __init__(self, key: PRNGKeyArray, **kwargs):
-        key, subkey = jr.split(key)
-        self.mu_base = MLPParameterizedDistribution(
-            subkey,
-            Normal(),
-            cond_dim=EightSchoolsModel.num_schools,
-            **kwargs,
-        )
+    def __init__(self):
+        self.mu_base = Normal()
+        self.tau_base = get_folded_distribution(StudentT, df=5)
+        self.theta_base = StudentT(df=jnp.full((8,), 5))
 
-        key, subkey = jr.split(key)
-        self.tau_base = MLPParameterizedDistribution(
-            subkey,
-            get_folded_distribution(StudentT, df=5),
-            cond_dim=EightSchoolsModel.num_schools,
-            **kwargs,
-        )
-
-        key, subkey = jr.split(key)
-        self.theta_base = MLPParameterizedDistribution(
-            subkey,
-            StudentT(df=5),
-            cond_dim="scalar",
-            **kwargs,
-        )
-
-    def __call__(
-        self,
-        obs: dict[str, Float[Array, " 8"]],
-    ):
-        obs = jnp.arctan(obs["y"] / 50)  # For better robustness
-        sample("mu_base", self.mu_base, condition=obs)
-        sample("tau_base", self.tau_base, condition=obs)
-
-        with plate("num_schools", EightSchoolsModel.num_schools):
-            sample("theta_base", self.theta_base, condition=obs)
+    def __call__(self):
+        sample("mu_base", self.mu_base)
+        sample("tau_base", self.tau_base)
+        sample("theta_base", self.theta_base)
 
 
 class EightSchoolsTask(AbstractTaskWithFileReference):
@@ -116,6 +86,7 @@ class EightSchoolsTask(AbstractTaskWithFileReference):
     guide: EightSchoolsGuide
     name = "eight_schools"
 
-    def __init__(self, key: PRNGKeyArray):
+    def __init__(self, key):
+        # accepts key for consistency in API
         self.model = EightSchoolsModel()
-        self.guide = EightSchoolsGuide(key, width_size=50)
+        self.guide = EightSchoolsGuide()
