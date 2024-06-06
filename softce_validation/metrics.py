@@ -2,11 +2,10 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-from cpe.models import AbstractGuide, AbstractModel
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-
-from cpe_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
+from softce.models import AbstractGuide, AbstractModel
+from softce_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
 
 
 def coverage_probabilities(

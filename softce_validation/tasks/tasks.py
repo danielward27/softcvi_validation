@@ -4,15 +4,14 @@ from functools import partial
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
-from cpe.models import AbstractGuide, AbstractModel
-from cpe.numpyro_utils import (
+from jaxtyping import Array, PRNGKeyArray
+from numpyro.util import check_model_guide_match
+from softce.models import AbstractGuide, AbstractModel
+from softce.numpyro_utils import (
     shape_only_trace,
     validate_data_and_model_match,
 )
-from jaxtyping import Array, PRNGKeyArray
-from numpyro.util import check_model_guide_match
-
-from cpe_validation.utils import get_abspath_project_root
+from softce_validation.utils import get_abspath_project_root
 
 
 class AbstractTask(eqx.Module):

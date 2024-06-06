@@ -1,7 +1,6 @@
 # %%
 import jax.numpy as jnp
 import numpyro
-from cpe.models import AbstractGuide, AbstractModel
 from flowjax.bijections import RationalQuadraticSpline
 from flowjax.distributions import (
     AbstractDistribution,
@@ -11,9 +10,9 @@ from flowjax.distributions import (
 from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from jaxtyping import Array, Float, PRNGKeyArray
-
-from cpe_validation.distributions import UniformWithLogisticBase
-from cpe_validation.tasks.tasks import AbstractTaskWithFileReference
+from softce.models import AbstractGuide, AbstractModel
+from softce_validation.distributions import UniformWithLogisticBase
+from softce_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 class SLCPModel(AbstractModel):

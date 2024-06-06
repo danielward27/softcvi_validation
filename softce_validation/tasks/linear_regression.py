@@ -3,7 +3,6 @@ from typing import ClassVar
 import jax.numpy as jnp
 import jax.random as jr
 import numpyro.distributions as ndist
-from cpe.models import AbstractGuide, AbstractModel
 from flowjax.distributions import (
     MultivariateNormal,
     Normal,
@@ -11,8 +10,8 @@ from flowjax.distributions import (
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
-
-from cpe_validation.tasks.tasks import AbstractTask
+from softce.models import AbstractGuide, AbstractModel
+from softce_validation.tasks.tasks import AbstractTask
 
 
 class LinearRegressionModel(AbstractModel):

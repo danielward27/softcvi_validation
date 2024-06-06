@@ -6,22 +6,22 @@ import jax.random as jr
 import jaxtyping
 import optax
 
-with jaxtyping.install_import_hook(["cnpe", "cnpe_validation"], "beartype.beartype"):
-    from cpe import losses
-    from cpe.train import train
-
-    from cpe_validation import utils
+with jaxtyping.install_import_hook(
+    ["softce", "softce_validation"], "beartype.beartype"
+):
+    from softce import losses
+    from softce.train import train
+    from softce_validation import utils
 
 
 from time import time
 
 import optax
-from cpe.models import AbstractGuide
 from jaxtyping import Array, PRNGKeyArray
-
-from cpe_validation import metrics
-from cpe_validation.tasks.available_tasks import get_available_tasks
-from cpe_validation.tasks.tasks import AbstractTask
+from softce.models import AbstractGuide
+from softce_validation import metrics
+from softce_validation.tasks.available_tasks import get_available_tasks
+from softce_validation.tasks.tasks import AbstractTask
 
 os.chdir(utils.get_abspath_project_root())
 

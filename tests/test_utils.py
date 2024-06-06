@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
-from cnpe_validation.distributions import Folded, TruncNormal
+from softce_validation.distributions import Folded, TruncNormal
 from flowjax.distributions import Normal
 from jax.scipy import integrate
 

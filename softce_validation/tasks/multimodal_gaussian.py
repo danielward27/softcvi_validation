@@ -1,13 +1,12 @@
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
-from cpe.models import AbstractGuide, AbstractModel
 from flowjax.distributions import AbstractDistribution, Normal, Uniform, VmapMixture
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray, Scalar
-
-from cpe_validation.distributions import TruncNormal
-from cpe_validation.tasks.tasks import AbstractTask
+from softce.models import AbstractGuide, AbstractModel
+from softce_validation.distributions import TruncNormal
+from softce_validation.tasks.tasks import AbstractTask
 
 
 class MultimodalGaussianModel(AbstractModel):

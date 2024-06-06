@@ -2,7 +2,6 @@ from typing import ClassVar
 
 import equinox as eqx
 import jax.numpy as jnp
-from cpe.models import AbstractGuide, AbstractModel
 from flowjax.bijections import Scale
 from flowjax.distributions import (
     AbstractDistribution,
@@ -17,9 +16,9 @@ from flowjax.utils import arraylike_to_array
 from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
-
-from cpe_validation.distributions import Folded
-from cpe_validation.tasks.tasks import AbstractTaskWithFileReference
+from softce.models import AbstractGuide, AbstractModel
+from softce_validation.distributions import Folded
+from softce_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 def get_folded_distribution(
