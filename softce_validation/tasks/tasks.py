@@ -4,22 +4,21 @@ from functools import partial
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
-from cnpe.models import AbstractNumpyroGuide, AbstractNumpyroModel
-from cnpe.numpyro_utils import (
+from jaxtyping import Array, PRNGKeyArray
+from numpyro.util import check_model_guide_match
+from softce.models import AbstractGuide, AbstractModel
+from softce.numpyro_utils import (
     shape_only_trace,
     validate_data_and_model_match,
 )
-from jaxtyping import Array, PRNGKeyArray
-from numpyro.util import check_model_guide_match
-
-from cnpe_validation.utils import get_abspath_project_root
+from softce_validation.utils import get_abspath_project_root
 
 
 class AbstractTask(eqx.Module):
     """A model, guide and method for generating ground truth samples."""
 
-    model: eqx.AbstractVar[AbstractNumpyroModel]
-    guide: eqx.AbstractVar[AbstractNumpyroGuide]
+    model: eqx.AbstractVar[AbstractModel]
+    guide: eqx.AbstractVar[AbstractGuide]
     name: eqx.AbstractClassVar[str]
 
     def __check_init__(self):
@@ -38,7 +37,7 @@ class AbstractTask(eqx.Module):
 
         check_model_guide_match(
             model_trace=shape_only_trace(model, obs=obs),
-            guide_trace=shape_only_trace(self.guide, obs=obs),
+            guide_trace=shape_only_trace(self.guide),
         )
 
     @abstractmethod
@@ -108,5 +107,6 @@ class AbstractTaskWithoutReference(AbstractTask):
 
     def get_latents_and_observed(self, key: PRNGKeyArray):
         """Generate an observation and ground truth latents from the model."""
-        latents, obs = self.model.reparam(set_val=False).sample_joint(key)
+        latents = self.model.reparam(set_val=False).sample_joint(key)
+        obs = {k: latents.pop(k) for k in self.model.observed_names}
         return {k: v[jnp.newaxis, ...] for k, v in latents.items()}, obs
