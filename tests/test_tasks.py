@@ -2,6 +2,7 @@ import jax.random as jr
 import pytest
 from numpyro.util import check_model_guide_match
 from softce.numpyro_utils import shape_only_trace
+
 from softce_validation.tasks.available_tasks import get_available_tasks
 
 

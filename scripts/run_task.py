@@ -1,24 +1,28 @@
 import argparse
 import os
+from functools import partial
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(
-    ["softce", "softce_validation"], "beartype.beartype"
+    ["softce", "softce_validation"],
+    "beartype.beartype",
 ):
     from softce import losses
     from softce.train import train
+
     from softce_validation import utils
 
 
 from time import time
 
-import optax
 from jaxtyping import Array, PRNGKeyArray
 from softce.models import AbstractGuide
+
 from softce_validation import metrics
 from softce_validation.tasks.available_tasks import get_available_tasks
 from softce_validation.tasks.tasks import AbstractTask
@@ -38,11 +42,12 @@ def time_wrapper(fn):
     return wrapped
 
 
-def main(
+def run_task(
     *,
     seed: int,
     task_name: str,
     steps: int,
+    return_samples_only: bool = False,
 ):
     train_fn = time_wrapper(train)
 
@@ -72,7 +77,7 @@ def main(
         "SoftCE": losses.SoftContrastiveEstimationLoss(
             model=task.model.reparam(set_val=True),
             obs=obs,
-            n_particles=10,
+            n_particles=20,
         ),
     }
 
@@ -87,6 +92,23 @@ def main(
             steps=steps,
             optimizer=optimizer,
         )
+
+    if return_samples_only:
+        # We use this for visualizing posteriors for individual tasks
+        n_samps = 1000
+        samples = {}
+
+        @partial(jax.vmap, in_axes=[0, None])
+        def sample_posterior(key, posterior):
+            sample = posterior.sample(key)
+            return task.model.latents_to_original_space(sample)
+
+        for method, posterior in posteriors.items():
+            key, subkey = jr.split(key)
+            samples[method] = sample_posterior(jr.split(subkey, n_samps), posterior)
+
+        samples["True"] = {k: v[:n_samps] for k, v in true_latents.items()}
+        return samples
 
     posterior_metrics = {
         k: compute_metrics(
@@ -104,6 +126,8 @@ def main(
         jnp.savez(f"{results_dir}{posterior_name}_{seed}.npz", **results)
         jnp.savez(f"{results_dir}losses_{seed}.npz", **loss_vals)
         jnp.savez(f"{results_dir}run_times_{seed}.npz", **run_times)
+
+    return None
 
 
 def compute_metrics(
@@ -129,7 +153,7 @@ def compute_metrics(
             obs=obs,
             reference_samples=reference_samples,
         ),
-        "posterior_mean_l2": metrics.posterior_mean_l2(
+        "negative_posterior_mean_l2": metrics.negative_posterior_mean_l2(
             key2,
             task=task,
             guide=guide,
@@ -144,10 +168,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SoftCE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--steps", type=int, default=50000)
+    parser.add_argument("--steps", type=int, default=100000)
     args = parser.parse_args()
 
-    main(
+    run_task(
         seed=args.seed,
         task_name=args.task_name,
         steps=args.steps,

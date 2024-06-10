@@ -5,6 +5,7 @@ from flowjax.distributions import AbstractDistribution, Normal, Uniform, VmapMix
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray, Scalar
 from softce.models import AbstractGuide, AbstractModel
+
 from softce_validation.distributions import TruncNormal
 from softce_validation.tasks.tasks import AbstractTask
 

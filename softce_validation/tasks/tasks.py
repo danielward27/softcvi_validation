@@ -11,6 +11,7 @@ from softce.numpyro_utils import (
     shape_only_trace,
     validate_data_and_model_match,
 )
+
 from softce_validation.utils import get_abspath_project_root
 
 

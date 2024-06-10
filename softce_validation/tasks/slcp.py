@@ -11,6 +11,7 @@ from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from jaxtyping import Array, Float, PRNGKeyArray
 from softce.models import AbstractGuide, AbstractModel
+
 from softce_validation.distributions import UniformWithLogisticBase
 from softce_validation.tasks.tasks import AbstractTaskWithFileReference
 

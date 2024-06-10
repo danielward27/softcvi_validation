@@ -5,7 +5,8 @@ import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
 from softce.models import AbstractGuide, AbstractModel
-from softce_validation.tasks.tasks import AbstractTask, AbstractTaskWithoutReference
+
+from softce_validation.tasks.tasks import AbstractTask
 
 
 def coverage_probabilities(
@@ -68,7 +69,7 @@ def coverage_probabilities(
     return eqx.filter_vmap(_coverage_frequency)(nominal_percentiles)
 
 
-def posterior_mean_l2(
+def negative_posterior_mean_l2(
     key: PRNGKeyArray,
     *,
     task: AbstractTask,
@@ -94,20 +95,10 @@ def posterior_mean_l2(
     reference_samples = _to_matrix(reference_samples)
 
     # Get an estimate of parameter scales
-    if isinstance(task, AbstractTaskWithoutReference):
-        # Prior scales if no reference
-        key, subkey = jr.split(key)
-        prior_samples = _map_wrapper(task.model.reparam(set_val=False).sample_prior)(
-            jr.split(key, n_samps),
-        )
-        prior_samples = _to_matrix(prior_samples)
-        scales = jnp.std(prior_samples, axis=0)
-    else:
-        scales = jnp.std(reference_samples, axis=0)
-
+    scales = jnp.std(reference_samples, axis=0)
     guide_samples = guide_samples / scales
     reference_samples = reference_samples / scales
-    return jnp.linalg.norm(guide_samples.mean(axis=0) - reference_samples.mean(axis=0))
+    return -jnp.linalg.norm(guide_samples.mean(axis=0) - reference_samples.mean(axis=0))
 
 
 def mean_log_prob_reference(

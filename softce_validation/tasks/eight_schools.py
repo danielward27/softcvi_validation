@@ -17,6 +17,7 @@ from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
 from softce.models import AbstractGuide, AbstractModel
+
 from softce_validation.distributions import Folded
 from softce_validation.tasks.tasks import AbstractTaskWithFileReference
 
