@@ -11,6 +11,7 @@ from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
 from softce.models import AbstractGuide, AbstractModel
+
 from softce_validation.tasks.tasks import AbstractTask
 
 
@@ -18,14 +19,15 @@ class LinearRegressionModel(AbstractModel):
     reparameterized: bool | None
     observed_names = {"y"}
     reparam_names = set()
+    sigma: float | int
     n_covariates: ClassVar[int] = 20
     n_obs: ClassVar[int] = 200
-    sigma: float = 0.5
     x: Float[Array, "200 20"]
 
     def __init__(self, key: PRNGKeyArray):
         self.x = jr.normal(key, (self.n_obs, self.n_covariates))
         self.reparameterized = None
+        self.sigma = 1
 
     def call_without_reparam(
         self,
@@ -58,7 +60,7 @@ class LinearRegressionModel(AbstractModel):
                 posterior_means[1:],
                 posterior_covariance[1:, 1:],
             ),
-            "bias": Normal(posterior_means[0], posterior_covariance[0, 0]),
+            "bias": Normal(posterior_means[0], posterior_covariance[0, 0] ** 0.5),
         }
 
 
