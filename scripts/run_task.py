@@ -69,12 +69,12 @@ def run_task(
     )
 
     loss_choices = {
-        "ELBO": losses.NegativeEvidenceLowerBound(
+        "SoftCE": losses.SoftContrastiveEstimationLoss(
             model=task.model.reparam(set_val=True),
             obs=obs,
             n_particles=20,
         ),
-        "SoftCE": losses.SoftContrastiveEstimationLoss(
+        "ELBO": losses.NegativeEvidenceLowerBound(
             model=task.model.reparam(set_val=True),
             obs=obs,
             n_particles=20,
@@ -96,7 +96,7 @@ def run_task(
     if return_samples_only:
         # We use this for visualizing posteriors for individual tasks
         n_samps = 1000
-        samples = {}
+        samples = {"True": {k: v[:n_samps] for k, v in true_latents.items()}}
 
         @partial(jax.vmap, in_axes=[0, None])
         def sample_posterior(key, posterior):
@@ -107,7 +107,6 @@ def run_task(
             key, subkey = jr.split(key)
             samples[method] = sample_posterior(jr.split(subkey, n_samps), posterior)
 
-        samples["True"] = {k: v[:n_samps] for k, v in true_latents.items()}
         return samples
 
     posterior_metrics = {
