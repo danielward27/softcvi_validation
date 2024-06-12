@@ -5,8 +5,8 @@ from softce_validation.tasks.slcp import SLCPTask
 
 def get_available_tasks():
     task_list = [
-        LinearRegressionTask,
         EightSchoolsTask,
+        LinearRegressionTask,
         SLCPTask,
     ]
     return {t.name: t for t in task_list}
