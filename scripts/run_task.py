@@ -13,13 +13,13 @@ with jaxtyping.install_import_hook(
     "beartype.beartype",
 ):
     from softce import losses
-    from softce.train import train
 
     from softce_validation import utils
 
 
 from time import time
 
+from flowjax.train.variational_fit import fit_to_variational_target
 from jaxtyping import Array, PRNGKeyArray
 from softce.models import AbstractGuide
 
@@ -48,8 +48,8 @@ def run_task(
     task_name: str,
     steps: int,
     return_samples_only: bool = False,
+    show_progress: bool = False,
 ):
-    train_fn = time_wrapper(train)
 
     key, subkey = jr.split(jr.PRNGKey(seed))
     task = get_available_tasks()[task_name](subkey)
@@ -68,17 +68,26 @@ def run_task(
         max_consecutive_errors=100,
     )
 
+    train_fn = time_wrapper(
+        partial(
+            fit_to_variational_target,
+            steps=steps,
+            show_progress=show_progress,
+            return_best=False,
+            optimizer=optimizer,
+        ),
+    )
+
+    loss_kwargs = {
+        "model": task.model.reparam(set_val=True),
+        "obs": obs,
+        "n_particles": 20,
+    }
+
     loss_choices = {
-        "SoftCE": losses.SoftContrastiveEstimationLoss(
-            model=task.model.reparam(set_val=True),
-            obs=obs,
-            n_particles=20,
-        ),
-        "ELBO": losses.NegativeEvidenceLowerBound(
-            model=task.model.reparam(set_val=True),
-            obs=obs,
-            n_particles=20,
-        ),
+        "SoftCE": losses.SoftContrastiveEstimationLoss(**loss_kwargs),
+        "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
+        "IWAE": losses.RenyiLoss(alpha=0, **loss_kwargs),
     }
 
     key, subkey = jr.split(key)
@@ -87,10 +96,8 @@ def run_task(
 
         (posteriors[loss_name], loss_vals[loss_name]), run_times[loss_name] = train_fn(
             subkey,
-            guide=task.guide,
+            task.guide,
             loss_fn=loss,
-            steps=steps,
-            optimizer=optimizer,
         )
 
     if return_samples_only:
@@ -138,26 +145,21 @@ def compute_metrics(
     reference_samples: dict[str, Array],
 ):
     key1, key2 = jr.split(key)
+    kwargs = {"guide": guide, "obs": obs, "reference_samples": reference_samples}
     return {
         "mean_log_prob_reference": metrics.mean_log_prob_reference(
             model=task.model,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
         "coverage_probabilities": metrics.coverage_probabilities(
             key1,
             model=task.model,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
         "negative_posterior_mean_l2": metrics.negative_posterior_mean_l2(
             key2,
             task=task,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
     }
 

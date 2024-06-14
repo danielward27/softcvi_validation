@@ -16,8 +16,9 @@ def main():
         samples = run_task(
             seed=0,
             task_name=task,
-            steps=10,
+            steps=100000,
             return_samples_only=True,
+            show_progress=True,
         )
         jnp.savez(f"results/samples/{task}.npz", **samples)
 

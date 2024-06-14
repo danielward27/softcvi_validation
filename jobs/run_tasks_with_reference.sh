@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=8GB
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --account=math026082
 #SBATCH --array=0-20
 
