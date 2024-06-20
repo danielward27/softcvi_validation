@@ -48,7 +48,7 @@ def coverage_probabilities(
     @eqx.filter_jit
     @_map_wrapper
     def log_prob_original_space(latents):
-        return guide.log_prob_original_space(latents, model, obs=obs)
+        return guide.log_prob_original_space(latents, obs=obs, model=model)
 
     key, subkey = jr.split(key)
     guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))

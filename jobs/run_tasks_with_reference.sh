@@ -19,7 +19,7 @@ source activate softce_env
 # pip install -e softce_validation
 
 
-task_names=("eight_schools" "multimodal_gaussian_flexible" "multimodal_gaussian_inflexible" "slcp" "linear_regression")
+task_names=("eight_schools" "slcp" "linear_regression")
 
 for task_name in "${task_names[@]}"; do
     python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name=$task_name
