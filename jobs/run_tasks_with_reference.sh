@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=8GB
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --account=math026082
 #SBATCH --array=0-20
 
@@ -19,7 +19,7 @@ source activate softce_env
 # pip install -e softce_validation
 
 
-task_names=("eight_schools" "multimodal_gaussian_flexible" "multimodal_gaussian_inflexible" "slcp" "linear_regression")
+task_names=("eight_schools" "slcp" "linear_regression")
 
 for task_name in "${task_names[@]}"; do
     python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name=$task_name

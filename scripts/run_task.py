@@ -13,13 +13,13 @@ with jaxtyping.install_import_hook(
     "beartype.beartype",
 ):
     from softce import losses
-    from softce.train import train
 
     from softce_validation import utils
 
 
 from time import time
 
+from flowjax.train.variational_fit import fit_to_variational_target
 from jaxtyping import Array, PRNGKeyArray
 from softce.models import AbstractGuide
 
@@ -47,86 +47,108 @@ def run_task(
     seed: int,
     task_name: str,
     steps: int,
-    return_samples_only: bool = False,
+    n_particles: int,
+    save_n_samples: int,
+    show_progress: bool,
 ):
-    train_fn = time_wrapper(train)
+    results_dir = f"{os.getcwd()}/results/{task_name}"
 
     key, subkey = jr.split(jr.PRNGKey(seed))
     task = get_available_tasks()[task_name](subkey)
 
     key, subkey = jr.split(key)
     true_latents, obs = task.get_latents_and_observed_and_validate(subkey)
-    posteriors = {}
-    loss_vals = {}
-    run_times = {}
 
     optimizer = optax.apply_if_finite(
         optax.chain(
             optax.clip_by_global_norm(10.0),
-            optax.adam(optax.linear_schedule(1e-3, 1e-4, steps)),
+            optax.adam(1e-3),
         ),
         max_consecutive_errors=100,
     )
 
+    train_fn = time_wrapper(
+        partial(
+            fit_to_variational_target,
+            steps=steps,
+            show_progress=show_progress,
+            return_best=False,
+            optimizer=optimizer,
+        ),
+    )
+
+    loss_kwargs = {
+        "model": task.model.reparam(set_val=True),
+        "obs": obs,
+        "n_particles": n_particles,
+    }
+
     loss_choices = {
-        "SoftCE": losses.SoftContrastiveEstimationLoss(
-            model=task.model.reparam(set_val=True),
-            obs=obs,
-            n_particles=20,
+        "SoftCE(alpha=0)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs,
+            negative_distribution="posterior",  # Negative doesn't matter as alpha=0
+            alpha=0,
         ),
-        "ELBO": losses.NegativeEvidenceLowerBound(
-            model=task.model.reparam(set_val=True),
-            obs=obs,
-            n_particles=20,
+        "SoftCE(posterior,alpha=1)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs,
+            negative_distribution="posterior",
+            alpha=1,
         ),
+        "SoftCE(proposal,alpha=1)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs,
+            negative_distribution="proposal",
+            alpha=1,
+        ),
+        "SoftCE(posterior,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs,
+            negative_distribution="posterior",
+            alpha=0.1,
+        ),
+        "SoftCE(proposal,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs,
+            negative_distribution="proposal",
+            alpha=0.1,
+        ),
+        # "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
+        # "IW-ELBO": losses.RenyiLoss(alpha=0, **loss_kwargs),
+        # "SN-FKL": losses.SelfNormalizedForwardKL(**loss_kwargs),
     }
 
     key, subkey = jr.split(key)
 
-    for loss_name, loss in loss_choices.items():
+    for method_name, loss in loss_choices.items():
 
-        (posteriors[loss_name], loss_vals[loss_name]), run_times[loss_name] = train_fn(
+        (posterior, _), run_time = train_fn(
             subkey,
-            guide=task.guide,
+            task.guide,
             loss_fn=loss,
-            steps=steps,
-            optimizer=optimizer,
         )
 
-    if return_samples_only:
-        # We use this for visualizing posteriors for individual tasks
-        n_samps = 1000
-        samples = {"True": {k: v[:n_samps] for k, v in true_latents.items()}}
+        metrics = compute_metrics(
+            key,
+            task=task,
+            guide=posterior,
+            obs=obs,
+            reference_samples=true_latents,
+        )
+        metrics["run_time"] = run_time
 
         @partial(jax.vmap, in_axes=[0, None])
         def sample_posterior(key, posterior):
             sample = posterior.sample(key)
-            return task.model.latents_to_original_space(sample)
+            return task.model.latents_to_original_space(sample, obs=obs)
 
-        for method, posterior in posteriors.items():
-            key, subkey = jr.split(key)
-            samples[method] = sample_posterior(jr.split(subkey, n_samps), posterior)
+        key, subkey = jr.split(key)
+        samples = sample_posterior(jr.split(subkey, save_n_samples), posterior)
+        file_name = f"{method_name}_seed={seed}_k={n_particles}.npz"
+        jnp.savez(f"{results_dir}/metrics/{file_name}", **metrics)
+        jnp.savez(f"{results_dir}/samples/{file_name}", **samples)
 
-        return samples
-
-    posterior_metrics = {
-        k: compute_metrics(
-            key,
-            task=task,
-            guide=guide,
-            obs=obs,
-            reference_samples=true_latents,
-        )
-        for k, guide in posteriors.items()
-    }
-
-    results_dir = f"{os.getcwd()}/results/{task.name}/"
-    for posterior_name, results in posterior_metrics.items():
-        jnp.savez(f"{results_dir}{posterior_name}_{seed}.npz", **results)
-        jnp.savez(f"{results_dir}losses_{seed}.npz", **loss_vals)
-        jnp.savez(f"{results_dir}run_times_{seed}.npz", **run_times)
-
-    return None
+    # Include true samples
+    jnp.savez(
+        f"{results_dir}/samples/True_seed={seed}_k={n_particles}.npz",
+        **{k: v[:save_n_samples] for k, v in true_latents.items()},
+    )
 
 
 def compute_metrics(
@@ -138,26 +160,21 @@ def compute_metrics(
     reference_samples: dict[str, Array],
 ):
     key1, key2 = jr.split(key)
+    kwargs = {"guide": guide, "obs": obs, "reference_samples": reference_samples}
     return {
         "mean_log_prob_reference": metrics.mean_log_prob_reference(
             model=task.model,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
         "coverage_probabilities": metrics.coverage_probabilities(
             key1,
             model=task.model,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
         "negative_posterior_mean_l2": metrics.negative_posterior_mean_l2(
             key2,
             task=task,
-            guide=guide,
-            obs=obs,
-            reference_samples=reference_samples,
+            **kwargs,
         ),
     }
 
@@ -167,11 +184,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SoftCE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--steps", type=int, default=100000)
+    parser.add_argument("--steps", type=int, default=50000)
+    parser.add_argument("--n-particles", type=int, default=10)
+    parser.add_argument("--save-n-samples", type=int, default=1000)
+    parser.add_argument("--show-progress", action="store_true")
     args = parser.parse_args()
-
     run_task(
         seed=args.seed,
         task_name=args.task_name,
         steps=args.steps,
+        n_particles=args.n_particles,
+        save_n_samples=args.save_n_samples,
+        show_progress=args.show_progress,
     )
