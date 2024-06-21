@@ -15,4 +15,4 @@
 TASK_NAME=$1
 module load lang/python/miniconda/3.9.7
 source activate softce_env
-python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name=TASK_NAME
+python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name=$TASK_NAME
