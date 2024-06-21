@@ -3,6 +3,8 @@
 # Example submission from softce_validation root
 # ./jobs/submitter.sh
 
+# You may need to make sure this is executable with : chmod +x submitter.sh
+
 task_names=("eight_schools" "slcp" "linear_regression")
 
 declare -A tasks
