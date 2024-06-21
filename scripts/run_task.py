@@ -84,34 +84,17 @@ def run_task(
     }
 
     loss_choices = {
-        "SoftCE(alpha=0)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",  # Negative doesn't matter as alpha=0
-            alpha=0,
+        "SoftCE(a=0)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=0),
+        "SoftCE(a=0.25)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs, alpha=0.25
         ),
-        "SoftCE(posterior,alpha=1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",
-            alpha=1,
+        "SoftCE(a=0.5)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=0.5),
+        "SoftCE(a=0.75)": losses.SoftContrastiveEstimationLoss(
+            **loss_kwargs, alpha=0.75
         ),
-        "SoftCE(proposal,alpha=1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="proposal",
-            alpha=1,
-        ),
-        "SoftCE(posterior,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",
-            alpha=0.1,
-        ),
-        "SoftCE(proposal,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="proposal",
-            alpha=0.1,
-        ),
-        # "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
-        # "IW-ELBO": losses.RenyiLoss(alpha=0, **loss_kwargs),
-        # "SN-FKL": losses.SelfNormalizedForwardKL(**loss_kwargs),
+        "SoftCE(a=1)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=1),
+        "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
+        "SNIS-FKL": losses.SelfNormImportanceWeightedForwardKLLoss(**loss_kwargs),
     }
 
     key, subkey = jr.split(key)

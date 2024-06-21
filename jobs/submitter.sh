@@ -1,17 +1,15 @@
 #!/bin/bash
 
 # Example submission from softce_validation root
-# ./jobs/submitter.sh
-
-# You may need to make sure this is executable with : chmod +x submitter.sh
+# chmod +x jobs/submitter.sh && ./jobs/submitter.sh
 
 task_names=("eight_schools" "slcp" "linear_regression")
 
 declare -A tasks
 tasks=(
-  ["eight_schools"]="01:00:00"
-  ["linear_regression"]="01:00:00"
-  ["slcp"]="01:30:00"
+  ["eight_schools"]="02:00:00"
+  ["linear_regression"]="02:00:00"
+  ["slcp"]="03:00:00"
 )
 
 for task in "${!tasks[@]}"; do

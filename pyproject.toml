@@ -1,13 +1,12 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
 dependencies = [
-    "flowjax",
+    "flowjax>=12.4.0",
     "equinox",
     "tqdm",
     "optax",
-    "diffrax",
     "beartype",
-    "requests", # TODO remove if I instead use python posteriordb interface
+    "requests",        # TODO remove if I instead use python posteriordb interface
 ]
 description = "Experiments for softce package."
 name = "softce_validation"
