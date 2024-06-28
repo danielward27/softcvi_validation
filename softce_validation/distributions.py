@@ -81,7 +81,7 @@ class UniformWithLogisticBase(AbstractTransformed):
 
     def __init__(self, minval: ArrayLike = 0, maxval: ArrayLike = 1):
         minval, maxval = jnp.broadcast_arrays(minval, maxval)
-        shape = minval.shape
+        shape = jnp.shape(minval)
 
         # Tanh maps logistic(scale=0.5) to uniform on [-1, 1]
         self.base_dist = Logistic(scale=jnp.full(shape, 0.5))

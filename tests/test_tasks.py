@@ -14,5 +14,5 @@ def test_tasks(task):
 
     check_model_guide_match(
         model_trace=shape_only_trace(task.model.reparam(set_val=True), obs=obs),
-        guide_trace=shape_only_trace(task.guide, obs=obs),
+        guide_trace=shape_only_trace(task.guide),
     )

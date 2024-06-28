@@ -20,9 +20,9 @@ class LinearRegressionModel(AbstractModel):
     observed_names = {"y"}
     reparam_names = set()
     sigma: float | int
-    n_covariates: ClassVar[int] = 20
+    n_covariates: ClassVar[int] = 50
     n_obs: ClassVar[int] = 200
-    x: Float[Array, "200 20"]
+    x: Float[Array, "200 50"]
 
     def __init__(self, key: PRNGKeyArray):
         self.x = jr.normal(key, (self.n_obs, self.n_covariates))

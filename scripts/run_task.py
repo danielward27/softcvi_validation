@@ -12,20 +12,18 @@ with jaxtyping.install_import_hook(
     ["softce", "softce_validation"],
     "beartype.beartype",
 ):
+    from flowjax.train.variational_fit import fit_to_variational_target
     from softce import losses
+    from softce.models import AbstractGuide
 
-    from softce_validation import utils
+    from softce_validation import metrics, utils
+    from softce_validation.tasks.available_tasks import get_available_tasks
+    from softce_validation.tasks.tasks import AbstractTask
 
 
 from time import time
 
-from flowjax.train.variational_fit import fit_to_variational_target
 from jaxtyping import Array, PRNGKeyArray
-from softce.models import AbstractGuide
-
-from softce_validation import metrics
-from softce_validation.tasks.available_tasks import get_available_tasks
-from softce_validation.tasks.tasks import AbstractTask
 
 os.chdir(utils.get_abspath_project_root())
 
@@ -77,24 +75,18 @@ def run_task(
         ),
     )
 
-    loss_kwargs = {
+    kwargs = {
         "model": task.model.reparam(set_val=True),
         "obs": obs,
         "n_particles": n_particles,
     }
 
     loss_choices = {
-        "SoftCE(a=0)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=0),
-        "SoftCE(a=0.25)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs, alpha=0.25
-        ),
-        "SoftCE(a=0.5)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=0.5),
-        "SoftCE(a=0.75)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs, alpha=0.75
-        ),
-        "SoftCE(a=1)": losses.SoftContrastiveEstimationLoss(**loss_kwargs, alpha=1),
-        "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
-        "SNIS-FKL": losses.SelfNormImportanceWeightedForwardKLLoss(**loss_kwargs),
+        "SoftCE(a=0)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=0),
+        "SoftCE(a=0.75)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=0.75),
+        "SoftCE(a=1)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=1),
+        "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
+        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
     }
 
     key, subkey = jr.split(key)
@@ -167,8 +159,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SoftCE")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--steps", type=int, default=50000)
-    parser.add_argument("--n-particles", type=int, default=10)
+    parser.add_argument("--steps", type=int, default=100000)
+    parser.add_argument("--n-particles", type=int, default=8)
     parser.add_argument("--save-n-samples", type=int, default=1000)
     parser.add_argument("--show-progress", action="store_true")
     args = parser.parse_args()
