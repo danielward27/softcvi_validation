@@ -9,6 +9,7 @@ from softcvi.models import AbstractGuide, AbstractModel
 from softcvi.numpyro_utils import (
     validate_data_and_model_match,
 )
+
 from softcvi_validation.utils import get_abspath_project_root
 
 
@@ -18,7 +19,7 @@ class AbstractTask(eqx.Module):
     model: eqx.AbstractVar[AbstractModel]
     guide: eqx.AbstractVar[AbstractGuide]
     name: eqx.AbstractClassVar[str]
-
+    # TODO support auxilary variables?
     # def __check_init__(self):
     #     model = self.model.reparam()
     #     model_trace = shape_only_trace(model)
