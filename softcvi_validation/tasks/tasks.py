@@ -5,14 +5,12 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from numpyro.util import check_model_guide_match
-from softce.models import AbstractGuide, AbstractModel
-from softce.numpyro_utils import (
-    shape_only_trace,
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.numpyro_utils import (
     validate_data_and_model_match,
 )
 
-from softce_validation.utils import get_abspath_project_root
+from softcvi_validation.utils import get_abspath_project_root
 
 
 class AbstractTask(eqx.Module):
@@ -21,25 +19,25 @@ class AbstractTask(eqx.Module):
     model: eqx.AbstractVar[AbstractModel]
     guide: eqx.AbstractVar[AbstractGuide]
     name: eqx.AbstractClassVar[str]
+    # TODO support auxilary variables?
+    # def __check_init__(self):
+    #     model = self.model.reparam()
+    #     model_trace = shape_only_trace(model)
+    #     obs = {}
+    #     for name in model.observed_names:
+    #         if name not in model_trace:
+    #             raise ValueError(
+    #                 f"Trace of model does not include observed node {name}.",
+    #             )
+    #         obs[name] = jnp.empty(
+    #             shape=model_trace[name]["value"].shape,
+    #             dtype=model_trace[name]["value"].dtype,
+    #         )  # keep runtime type checker happy
 
-    def __check_init__(self):
-        model = self.model.reparam()
-        model_trace = shape_only_trace(model)
-        obs = {}
-        for name in model.observed_names:
-            if name not in model_trace:
-                raise ValueError(
-                    f"Trace of model does not include observed node {name}.",
-                )
-            obs[name] = jnp.empty(
-                shape=model_trace[name]["value"].shape,
-                dtype=model_trace[name]["value"].dtype,
-            )  # keep runtime type checker happy
-
-        check_model_guide_match(
-            model_trace=shape_only_trace(model, obs=obs),
-            guide_trace=shape_only_trace(self.guide),
-        )
+    #     check_model_guide_match(
+    #         model_trace=shape_only_trace(model, obs=obs),
+    #         guide_trace=shape_only_trace(self.guide),
+    #     )
 
     @abstractmethod
     def get_latents_and_observed(
@@ -70,11 +68,17 @@ class AbstractTask(eqx.Module):
     def _validate_data(self, latents: dict[str, Array], obs: dict[str, Array]):
         """Validate data matches model with a batch dimension in latents."""
         model = self.model.reparam(set_val=False)
-        validate_data_and_model_match(obs, model, assert_present=model.observed_names)
+        validate_data_and_model_match(
+            obs,
+            model,
+            assert_present=model.observed_names,
+            obs=obs,
+        )
         validate_latents_fn = partial(
             validate_data_and_model_match,
             model=model,
             assert_present=model.latent_names,
+            obs=obs,
         )
         eqx.filter_vmap(validate_latents_fn)(latents)
 

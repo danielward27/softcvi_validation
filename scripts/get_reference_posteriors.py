@@ -1,3 +1,4 @@
+# %%
 import bz2
 import io
 import json
@@ -38,8 +39,8 @@ def get_slcp_posterior():
     np.savez("reference_posteriors/slcp/observations.npz", x=obs)
 
 
-def get_eight_schools_posterior():
-    url = "https://github.com/stan-dev/posteriordb/raw/0.5.0/posterior_database/reference_posteriors/draws/draws/eight_schools-eight_schools_noncentered.json.zip"
+def get_posteriordb_posterior(name):
+    url = f"https://github.com/stan-dev/posteriordb/raw/0.5.0/posterior_database/reference_posteriors/draws/draws/{name}.json.zip"
 
     response = requests.get(url)
     response.raise_for_status()
@@ -60,18 +61,42 @@ def get_eight_schools_posterior():
     for k, v in draws.items():
         key_root = k.split("[")[0]
         stacked_draws[key_root].append(v)
-
-    latents = {
+    return {
         k: np.stack(v, axis=-1).squeeze()[np.newaxis, ...]
         for k, v in stacked_draws.items()
     }
 
-    obs = np.array([[28, 8, -3, 7, -1, 1, 18, 12]], dtype=float)
+
+def get_posteriordb_data(name):
+    url = f"https://github.com/stan-dev/posteriordb/raw/0.5.0/posterior_database/data/data/{name}.json.zip"
+    response = requests.get(url)
+    response.raise_for_status()
+    zip_content = io.BytesIO(response.content)
+
+    with zipfile.ZipFile(zip_content, "r") as zip_ref:
+        with zip_ref.open(zip_ref.infolist()[0]) as json_file:
+            data = json.load(json_file)
+    return {k: np.array(arr, dtype=float) for k, arr in data.items()}
+
+
+def get_eight_schools_posterior():
+    latents = get_posteriordb_posterior("eight_schools-eight_schools_noncentered")
+    obs = {"y": get_posteriordb_data("eight_schools")["y"][np.newaxis, ...]}
     np.savez("reference_posteriors/eight_schools/latents.npz", **latents)
-    np.savez("reference_posteriors/eight_schools/observations.npz", y=obs)
+    np.savez("reference_posteriors/eight_schools/observations.npz", **obs)
+
+
+def get_garch_posterior():
+    latents = get_posteriordb_posterior("garch-garch11")
+    obs = {"y": get_posteriordb_data("garch")["y"][np.newaxis, ...]}
+    np.savez("reference_posteriors/garch/latents.npz", **latents)
+    np.savez("reference_posteriors/garch/observations.npz", **obs)
 
 
 if __name__ == "__main__":
     # Run with python -m scripts.get_reference_posteriors
-    get_slcp_posterior()
     get_eight_schools_posterior()
+    get_slcp_posterior()
+    get_garch_posterior()
+
+# %%

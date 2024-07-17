@@ -9,23 +9,21 @@ import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(
-    ["softce", "softce_validation"],
+    ["softcvi", "softcvi_validation"],
     "beartype.beartype",
 ):
-    from softce import losses
+    from flowjax.train.variational_fit import fit_to_variational_target
+    from softcvi import losses
+    from softcvi.models import AbstractGuide
 
-    from softce_validation import utils
+    from softcvi_validation import metrics, utils
+    from softcvi_validation.tasks.available_tasks import get_available_tasks
+    from softcvi_validation.tasks.tasks import AbstractTask
 
 
 from time import time
 
-from flowjax.train.variational_fit import fit_to_variational_target
 from jaxtyping import Array, PRNGKeyArray
-from softce.models import AbstractGuide
-
-from softce_validation import metrics
-from softce_validation.tasks.available_tasks import get_available_tasks
-from softce_validation.tasks.tasks import AbstractTask
 
 os.chdir(utils.get_abspath_project_root())
 
@@ -49,6 +47,7 @@ def run_task(
     steps: int,
     n_particles: int,
     save_n_samples: int,
+    negative_distribution: bool,
     show_progress: bool,
 ):
     results_dir = f"{os.getcwd()}/results/{task_name}"
@@ -77,41 +76,30 @@ def run_task(
         ),
     )
 
-    loss_kwargs = {
+    kwargs = {
         "model": task.model.reparam(set_val=True),
         "obs": obs,
         "n_particles": n_particles,
     }
 
     loss_choices = {
-        "SoftCE(alpha=0)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",  # Negative doesn't matter as alpha=0
+        "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
             alpha=0,
+            negative_distribution=negative_distribution,
         ),
-        "SoftCE(posterior,alpha=1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",
+        "SoftCVI(a=0.75)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
+            alpha=0.75,
+            negative_distribution=negative_distribution,
+        ),
+        "SoftCVI(a=1)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
             alpha=1,
+            negative_distribution=negative_distribution,
         ),
-        "SoftCE(proposal,alpha=1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="proposal",
-            alpha=1,
-        ),
-        "SoftCE(posterior,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="posterior",
-            alpha=0.1,
-        ),
-        "SoftCE(proposal,alpha=0.1)": losses.SoftContrastiveEstimationLoss(
-            **loss_kwargs,
-            negative_distribution="proposal",
-            alpha=0.1,
-        ),
-        # "ELBO": losses.EvidenceLowerBoundLoss(**loss_kwargs),
-        # "IW-ELBO": losses.RenyiLoss(alpha=0, **loss_kwargs),
-        # "SN-FKL": losses.SelfNormalizedForwardKL(**loss_kwargs),
+        "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
+        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
     }
 
     key, subkey = jr.split(key)
@@ -138,15 +126,16 @@ def run_task(
             sample = posterior.sample(key)
             return task.model.latents_to_original_space(sample, obs=obs)
 
+        postfix = f"_seed={seed}_k={n_particles}_negative={negative_distribution}.npz"
+
         key, subkey = jr.split(key)
         samples = sample_posterior(jr.split(subkey, save_n_samples), posterior)
-        file_name = f"{method_name}_seed={seed}_k={n_particles}.npz"
-        jnp.savez(f"{results_dir}/metrics/{file_name}", **metrics)
-        jnp.savez(f"{results_dir}/samples/{file_name}", **samples)
+        jnp.savez(f"{results_dir}/metrics/{method_name}{postfix}", **metrics)
+        jnp.savez(f"{results_dir}/samples/{method_name}{postfix}", **samples)
 
     # Include true samples
     jnp.savez(
-        f"{results_dir}/samples/True_seed={seed}_k={n_particles}.npz",
+        f"{results_dir}/samples/True{postfix}",
         **{k: v[:save_n_samples] for k, v in true_latents.items()},
     )
 
@@ -181,12 +170,14 @@ def compute_metrics(
 
 if __name__ == "__main__":
     # python -m scripts.run_task --seed=0 --task-name="eight_schools"
-    parser = argparse.ArgumentParser(description="SoftCE")
+
+    parser = argparse.ArgumentParser(description="softcvi")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--steps", type=int, default=50000)
-    parser.add_argument("--n-particles", type=int, default=10)
+    parser.add_argument("--steps", type=int, default=100000)
+    parser.add_argument("--n-particles", type=int, default=8)
     parser.add_argument("--save-n-samples", type=int, default=1000)
+    parser.add_argument("--negative-distribution", type=str, default="proposal")
     parser.add_argument("--show-progress", action="store_true")
     args = parser.parse_args()
     run_task(
@@ -195,5 +186,6 @@ if __name__ == "__main__":
         steps=args.steps,
         n_particles=args.n_particles,
         save_n_samples=args.save_n_samples,
+        negative_distribution=args.negative_distribution,
         show_progress=args.show_progress,
     )

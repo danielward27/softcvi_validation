@@ -1,29 +1,28 @@
-# %%
 import jax.numpy as jnp
 import numpyro
 from flowjax.bijections import RationalQuadraticSpline
 from flowjax.distributions import (
     AbstractDistribution,
     MultivariateNormal,
-    Normal,
+    Uniform,
 )
 from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
+from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
-from softce.models import AbstractGuide, AbstractModel
-
-from softce_validation.distributions import UniformWithLogisticBase
-from softce_validation.tasks.tasks import AbstractTaskWithFileReference
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 class SLCPModel(AbstractModel):
     reparameterized: bool | None = None
     observed_names = frozenset({"x"})
-    reparam_names = frozenset({"theta"})
+    reparam_names = frozenset(set())
+    interval: int = 3
 
     def call_without_reparam(self, obs: dict[str, Float[Array, "4 2"]] | None = None):
         obs = obs["x"] if obs is not None else None
-        theta = sample("theta", UniformWithLogisticBase(jnp.full((5,), -3), 3))
+        theta = sample("theta", Uniform(jnp.full((5,), -self.interval), self.interval))
         mu = theta[:2]
         scale1 = theta[2] ** 2
         scale2 = theta[3] ** 2
@@ -36,22 +35,23 @@ class SLCPModel(AbstractModel):
 
 
 class SLCPGuide(AbstractGuide):
-    # Key accepted for consistency of API
-    theta_base: AbstractDistribution
+    theta: AbstractDistribution
 
     def __init__(
         self,
         key: PRNGKeyArray,
     ):
-        self.theta_base = masked_autoregressive_flow(
+        base_dist = Uniform(jnp.full((5,), -SLCPModel.interval), SLCPModel.interval)
+
+        self.theta = masked_autoregressive_flow(
             key=key,
-            base_dist=Normal(jnp.zeros((5,)), 0.75),
+            base_dist=non_trainable(base_dist),  # Don't optimize uniform!
             nn_width=20,
-            transformer=RationalQuadraticSpline(knots=10, interval=4),
+            transformer=RationalQuadraticSpline(knots=10, interval=SLCPModel.interval),
         )
 
     def __call__(self):
-        sample("theta_base", self.theta_base)
+        sample("theta", self.theta)
 
 
 class SLCPTask(AbstractTaskWithFileReference):
