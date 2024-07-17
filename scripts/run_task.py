@@ -15,6 +15,7 @@ with jaxtyping.install_import_hook(
     from flowjax.train.variational_fit import fit_to_variational_target
     from softcvi import losses
     from softcvi.models import AbstractGuide
+
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
     from softcvi_validation.tasks.tasks import AbstractTask
@@ -82,17 +83,17 @@ def run_task(
     }
 
     loss_choices = {
-        "softcvi(a=0)": losses.SoftContrastiveEstimationLoss(
+        "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
             **kwargs,
             alpha=0,
             negative_distribution=negative_distribution,
         ),
-        "softcvi(a=0.75)": losses.SoftContrastiveEstimationLoss(
+        "SoftCVI(a=0.75)": losses.SoftContrastiveEstimationLoss(
             **kwargs,
             alpha=0.75,
             negative_distribution=negative_distribution,
         ),
-        "softcvi(a=1)": losses.SoftContrastiveEstimationLoss(
+        "SoftCVI(a=1)": losses.SoftContrastiveEstimationLoss(
             **kwargs,
             alpha=1,
             negative_distribution=negative_distribution,
