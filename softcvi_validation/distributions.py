@@ -13,6 +13,7 @@ from flowjax.distributions import (
 from flowjax.utils import arraylike_to_array
 from flowjax.wrappers import AbstractUnwrappable, BijectionReparam, NonTrainable, unwrap
 from jax.flatten_util import ravel_pytree
+from jax.nn import softplus
 from jax.scipy.special import logsumexp
 from jax.scipy.stats import truncnorm
 from jaxtyping import Array, ArrayLike, PRNGKeyArray
@@ -82,11 +83,13 @@ class UniformWithLogisticBase(AbstractTransformed):
     def __init__(self, minval: ArrayLike = 0, maxval: ArrayLike = 1):
         minval, maxval = jnp.broadcast_arrays(minval, maxval)
         shape = jnp.shape(minval)
-
         # Tanh maps logistic(scale=0.5) to uniform on [-1, 1]
         self.base_dist = Logistic(scale=jnp.full(shape, 0.5))
-        scale = (maxval - minval) / 2
-        self.bijection = Chain([Tanh(shape), Scale(scale), Loc(minval + scale)])
+        scale_vals = (maxval - minval) / 2
+        scale = Scale(jnp.ones_like(scale_vals))
+        # Replace scale to avoid reparameterization
+        scale = eqx.tree_at(lambda scale: scale.scale, scale, scale_vals)
+        self.bijection = Chain([Tanh(shape), scale, Loc(minval + scale_vals)])
 
 
 class Folded(AbstractDistribution):
@@ -186,3 +189,76 @@ class MLPParameterizedDistribution(AbstractDistribution):
 
     def to_dist(self, condition):
         return self.constructor(self.mlp(condition))
+
+
+class _PositiveImproperUniformBase(AbstractDistribution):
+    shape: tuple[int, ...]
+    cond_shape: ClassVar[tuple[int, ...]] = None
+
+    def _log_prob(self, x, condition=None):
+        return -softplus(-x).sum()
+
+    def _sample(self, key, condition=None):
+        raise NotImplementedError()
+
+
+class PositiveImproperUniform(AbstractTransformed):
+    base_dist: _PositiveImproperUniformBase
+    bijection: SoftPlus
+
+    def __init__(self, shape: tuple[int, ...] = ()):
+        self.base_dist = _PositiveImproperUniformBase(shape)
+        self.bijection = SoftPlus(shape)
+
+
+# class JointDistribution(AbstractDistribution):
+#     """Stack unconditional univariate distributions into a joint distribution."""
+
+#     dists: tuple[AbstractDistribution, ...]
+#     shape: tuple[int, ...]
+#     cond_shape: ClassVar[None] = None
+
+#     def __init__(self, *dists):
+#         self.dists = tuple(dists)
+#         self.shape = (len(dists),)
+
+#     def _sample(self, key, condition=None):
+#         keys = jr.split(key, len(self.dists))
+#         samples = tuple(d.sample(k) for d, k in zip(self.dists, keys, strict=True))
+#         return jr.stack(samples)
+
+#     def _log_prob(self, x, condition=None):
+#         log_probs = (d.log_prob(xi) for d, xi in zip(self.dists, x))
+#         return sum(log_probs)
+
+
+# from flowjax.bijections import Identity, Stack
+
+
+# class JointTransformed(AbstractTransformed):
+#     """Stack univariate distributions into a joint distribution"""
+
+#     base_dist: JointDistribution
+#     bijection: Stack
+
+#     def __init__(*dists):
+#         base_distributions = []
+#         bijections = []
+
+#         for d in dists:
+#             if isinstance(d, AbstractTransformed):
+#                 d = d.merge_transforms()
+#                 base_distributions.append(d.base_dist)
+#                 bijections.append(d.bijection)
+#             else:
+#                 base_distributions.append()
+
+#         base_dists = (
+#             d.base_dist if isinstance(d, AbstractTransformed) else d for d in dists
+#         )
+#         transforms = (
+#             d.bijection if isinstance(d, AbstractTransformed) else Identity()
+#             for d in dists
+#         )
+#         self.base_dist = JointDistribution(*base_dists)
+#         self.transform = Stack

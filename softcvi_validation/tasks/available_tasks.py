@@ -1,7 +1,7 @@
-from softce_validation.tasks.eight_schools import EightSchoolsTask
-from softce_validation.tasks.garch import GARCHTask
-from softce_validation.tasks.linear_regression import LinearRegressionTask
-from softce_validation.tasks.slcp import SLCPTask
+from softcvi_validation.tasks.eight_schools import EightSchoolsTask
+from softcvi_validation.tasks.garch import GARCHTask
+from softcvi_validation.tasks.linear_regression import LinearRegressionTask
+from softcvi_validation.tasks.slcp import SLCPTask
 
 
 def get_available_tasks():

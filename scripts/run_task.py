@@ -9,16 +9,15 @@ import jaxtyping
 import optax
 
 with jaxtyping.install_import_hook(
-    ["softce", "softce_validation"],
+    ["softcvi", "softcvi_validation"],
     "beartype.beartype",
 ):
     from flowjax.train.variational_fit import fit_to_variational_target
-    from softce import losses
-    from softce.models import AbstractGuide
-
-    from softce_validation import metrics, utils
-    from softce_validation.tasks.available_tasks import get_available_tasks
-    from softce_validation.tasks.tasks import AbstractTask
+    from softcvi import losses
+    from softcvi.models import AbstractGuide
+    from softcvi_validation import metrics, utils
+    from softcvi_validation.tasks.available_tasks import get_available_tasks
+    from softcvi_validation.tasks.tasks import AbstractTask
 
 
 from time import time
@@ -47,6 +46,7 @@ def run_task(
     steps: int,
     n_particles: int,
     save_n_samples: int,
+    negative_distribution: bool,
     show_progress: bool,
 ):
     results_dir = f"{os.getcwd()}/results/{task_name}"
@@ -82,9 +82,21 @@ def run_task(
     }
 
     loss_choices = {
-        "SoftCE(a=0)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=0),
-        "SoftCE(a=0.75)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=0.75),
-        "SoftCE(a=1)": losses.SoftContrastiveEstimationLoss(**kwargs, alpha=1),
+        "softcvi(a=0)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
+            alpha=0,
+            negative_distribution=negative_distribution,
+        ),
+        "softcvi(a=0.75)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
+            alpha=0.75,
+            negative_distribution=negative_distribution,
+        ),
+        "softcvi(a=1)": losses.SoftContrastiveEstimationLoss(
+            **kwargs,
+            alpha=1,
+            negative_distribution=negative_distribution,
+        ),
         "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
         "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
     }
@@ -113,15 +125,16 @@ def run_task(
             sample = posterior.sample(key)
             return task.model.latents_to_original_space(sample, obs=obs)
 
+        postfix = f"_seed={seed}_k={n_particles}_negative={negative_distribution}.npz"
+
         key, subkey = jr.split(key)
         samples = sample_posterior(jr.split(subkey, save_n_samples), posterior)
-        file_name = f"{method_name}_seed={seed}_k={n_particles}.npz"
-        jnp.savez(f"{results_dir}/metrics/{file_name}", **metrics)
-        jnp.savez(f"{results_dir}/samples/{file_name}", **samples)
+        jnp.savez(f"{results_dir}/metrics/{method_name}{postfix}", **metrics)
+        jnp.savez(f"{results_dir}/samples/{method_name}{postfix}", **samples)
 
     # Include true samples
     jnp.savez(
-        f"{results_dir}/samples/True_seed={seed}_k={n_particles}.npz",
+        f"{results_dir}/samples/True{postfix}",
         **{k: v[:save_n_samples] for k, v in true_latents.items()},
     )
 
@@ -156,12 +169,14 @@ def compute_metrics(
 
 if __name__ == "__main__":
     # python -m scripts.run_task --seed=0 --task-name="eight_schools"
-    parser = argparse.ArgumentParser(description="SoftCE")
+
+    parser = argparse.ArgumentParser(description="softcvi")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
     parser.add_argument("--steps", type=int, default=100000)
     parser.add_argument("--n-particles", type=int, default=8)
     parser.add_argument("--save-n-samples", type=int, default=1000)
+    parser.add_argument("--negative-distribution", type=str, default="proposal")
     parser.add_argument("--show-progress", action="store_true")
     args = parser.parse_args()
     run_task(
@@ -170,5 +185,6 @@ if __name__ == "__main__":
         steps=args.steps,
         n_particles=args.n_particles,
         save_n_samples=args.save_n_samples,
+        negative_distribution=args.negative_distribution,
         show_progress=args.show_progress,
     )

@@ -3,8 +3,7 @@ import jax.random as jr
 import pytest
 from flowjax.distributions import Normal
 from jax.scipy import integrate
-
-from softce_validation.distributions import Folded, TruncNormal
+from softcvi_validation.distributions import Folded, TruncNormal
 
 
 def test_folded():

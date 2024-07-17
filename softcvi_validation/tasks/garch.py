@@ -1,10 +1,9 @@
-# %%
+from functools import partial
 from typing import ClassVar
 
-import jax
 import jax.numpy as jnp
 import numpyro.distributions as ndist
-from flowjax.bijections import Chain, Loc, RationalQuadraticSpline
+from flowjax.bijections import Invert, RationalQuadraticSpline
 from flowjax.distributions import (
     LogNormal,
     Normal,
@@ -15,10 +14,10 @@ from flowjax.experimental.numpyro import sample
 from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
-from softce.models import AbstractGuide, AbstractModel
-
-from softce_validation.distributions import MLPParameterizedDistribution
-from softce_validation.tasks.tasks import AbstractTaskWithFileReference
+from numpyro.distributions import constraints
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi_validation.distributions import MLPParameterizedDistribution
+from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 class GARCHModel(AbstractModel):
@@ -35,23 +34,14 @@ class GARCHModel(AbstractModel):
         self,
         obs: dict[str, Float[Array, " 200"]] | None = None,
     ):
-        mu = sample(
-            "mu",
-            ndist.ImproperUniform(ndist.constraints.real, (), ()),
-        )
+        mu = sample("mu", ndist.ImproperUniform(constraints.real, (), ()))
+        alpha0 = sample("alpha0", ndist.ImproperUniform(constraints.positive, (), ()))
 
-        alpha0 = sample(
-            "alpha0",
-            ndist.ImproperUniform(ndist.constraints.positive, (), ()),
-        )
-        alpha1 = sample(
-            "alpha1",
-            Uniform(0, 1),
-        )
-        beta1 = sample(
-            "beta1",
-            Uniform(0, 1 - alpha1),
-        )
+        alpha1_dist = Uniform(0, 1)
+        alpha1 = sample("alpha1", alpha1_dist)
+
+        beta1_dist = Uniform(0, 1 - alpha1)
+        beta1 = sample("beta1", beta1_dist)
 
         def step_fn(carry, y):
             sigma, y_current = carry
@@ -59,13 +49,11 @@ class GARCHModel(AbstractModel):
             y = sample("y", ndist.Normal(mu, sigma), obs=y)
             return (sigma, y), (sigma, y)
 
+        step_fn = partial(step_fn)
+
         y0 = obs["y"][0] if obs is not None else mu
-        scan(
-            step_fn,
-            init=(jnp.array(self.sigma1), y0),
-            xs=None if obs is None else obs["y"],
-            length=self.time,
-        )
+        xs = None if obs is None else obs["y"]
+        scan(step_fn, init=(jnp.array(self.sigma1), y0), xs=xs, length=self.time)
 
 
 class GARCHGuide(AbstractGuide):
@@ -78,21 +66,16 @@ class GARCHGuide(AbstractGuide):
         self.mu = Normal()
         self.alpha0 = LogNormal()
 
-        def zero_one_spline_transformed_uniform():
-            return Transformed(
-                non_trainable(Uniform(-0.5, 0.5)),
-                Chain(
-                    [
-                        RationalQuadraticSpline(knots=10, interval=0.5),
-                        non_trainable(Loc(0.5)),
-                    ],
-                ),
-            )
-
-        self.alpha1 = zero_one_spline_transformed_uniform()
+        self.alpha1 = Transformed(
+            non_trainable(Uniform(0, 1)),
+            Invert(RationalQuadraticSpline(knots=10, interval=(0, 1))),
+        )
         self.beta1_base = MLPParameterizedDistribution(
             key,
-            zero_one_spline_transformed_uniform(),
+            Transformed(
+                non_trainable(Uniform(0, 1)),
+                Invert(RationalQuadraticSpline(knots=10, interval=(0, 1))),
+            ),
             cond_dim=2,  # alpha0, alpha1
             width_size=20,
         )

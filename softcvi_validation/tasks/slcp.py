@@ -10,9 +10,8 @@ from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
-from softce.models import AbstractGuide, AbstractModel
-
-from softce_validation.tasks.tasks import AbstractTaskWithFileReference
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 class SLCPModel(AbstractModel):

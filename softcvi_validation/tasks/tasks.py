@@ -5,12 +5,11 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from softce.models import AbstractGuide, AbstractModel
-from softce.numpyro_utils import (
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.numpyro_utils import (
     validate_data_and_model_match,
 )
-
-from softce_validation.utils import get_abspath_project_root
+from softcvi_validation.utils import get_abspath_project_root
 
 
 class AbstractTask(eqx.Module):

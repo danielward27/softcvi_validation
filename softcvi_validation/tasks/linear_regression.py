@@ -10,9 +10,8 @@ from flowjax.distributions import (
 from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
-from softce.models import AbstractGuide, AbstractModel
-
-from softce_validation.tasks.tasks import AbstractTask
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi_validation.tasks.tasks import AbstractTask
 
 
 class LinearRegressionModel(AbstractModel):

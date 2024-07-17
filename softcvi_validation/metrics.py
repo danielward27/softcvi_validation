@@ -4,9 +4,8 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-from softce.models import AbstractGuide, AbstractModel
-
-from softce_validation.tasks.tasks import AbstractTask
+from softcvi.models import AbstractGuide, AbstractModel
+from softcvi_validation.tasks.tasks import AbstractTask
 
 
 def coverage_probabilities(
