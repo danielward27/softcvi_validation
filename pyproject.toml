@@ -8,6 +8,9 @@ dependencies = [
     "beartype",
     "requests",
     "numpyro",
+    "matplotlib",
+    "seaborn",
+    "pandas",
 ]
 description = "Experiments for softcvi package."
 name = "softcvi_validation"
