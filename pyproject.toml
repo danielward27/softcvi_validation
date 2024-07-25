@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
 dependencies = [
-    "flowjax>=12.4.0",
+    "flowjax>=13.0",
     "equinox",
     "tqdm",
     "optax",
