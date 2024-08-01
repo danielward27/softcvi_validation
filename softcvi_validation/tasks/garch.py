@@ -1,3 +1,5 @@
+"""A Generalized Autoregressive Conditional heteroscedasticit GARCH(1,1) task."""
+
 from functools import partial
 from typing import ClassVar
 
@@ -16,11 +18,14 @@ from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import constraints
 from softcvi.models import AbstractGuide, AbstractModel
+
 from softcvi_validation.distributions import MLPParameterizedDistribution
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
 class GARCHModel(AbstractModel):
+    """The GARCH(1,1) model."""
+
     reparameterized: bool | None
     observed_names = {"y"}
     reparam_names = {"beta1"}
@@ -40,7 +45,7 @@ class GARCHModel(AbstractModel):
         alpha1_dist = Uniform(0, 1)
         alpha1 = sample("alpha1", alpha1_dist)
 
-        beta1_dist = Uniform(0, 1 - alpha1)
+        beta1_dist = Uniform(0, jnp.clip(1 - alpha1, min=1e-8))  # Clip for stability.
         beta1 = sample("beta1", beta1_dist)
 
         def step_fn(carry, y):
@@ -57,6 +62,16 @@ class GARCHModel(AbstractModel):
 
 
 class GARCHGuide(AbstractGuide):
+    """The guide used for the GARCH task.
+
+    The guide uses a combination of simple distributions (for mu and alpha0), in
+    addition to more flexible distributions (uniforms transformed with splines)
+    for alpha1 and beta1.
+
+    Args:
+        key: Jax random key.
+    """
+
     mu: Normal
     alpha0: LogNormal
     alpha1: Transformed
@@ -78,6 +93,7 @@ class GARCHGuide(AbstractGuide):
             ),
             cond_dim=2,  # alpha0, alpha1
             width_size=20,
+            final_activation=lambda x: x / 5,  # At initialization prefer smaller vals
         )
 
     def __call__(self):
@@ -88,9 +104,16 @@ class GARCHGuide(AbstractGuide):
 
 
 class GARCHTask(AbstractTaskWithFileReference):
+    """Generalized autoregressive conditional heteroskedasticity (GARCH) task.
+
+    For more information, see Bollerslev, 1986,
+    https://doi.org/10.1016/0304-4076(86)90063-1.
+    """
+
     model: GARCHModel
     guide: GARCHGuide
     name = "garch"
+    learning_rate = 5e-4
 
     def __init__(self, key: PRNGKeyArray):
         self.model = GARCHModel()

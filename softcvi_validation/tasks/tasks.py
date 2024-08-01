@@ -1,3 +1,5 @@
+"""Abstract task classes."""
+
 from abc import abstractmethod
 from functools import partial
 
@@ -19,6 +21,7 @@ class AbstractTask(eqx.Module):
     model: eqx.AbstractVar[AbstractModel]
     guide: eqx.AbstractVar[AbstractGuide]
     name: eqx.AbstractClassVar[str]
+    learning_rate: eqx.AbstractVar[float]
     # TODO support auxilary variables?
     # def __check_init__(self):
     #     model = self.model.reparam()
