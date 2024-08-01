@@ -3,6 +3,7 @@ import jax.random as jr
 import pytest
 from flowjax.distributions import Normal
 from jax.scipy import integrate
+
 from softcvi_validation.distributions import Folded, TruncNormal
 
 

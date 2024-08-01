@@ -1,3 +1,5 @@
+"""Linear regression task."""
+
 from typing import ClassVar
 
 import jax.numpy as jnp
@@ -11,10 +13,17 @@ from flowjax.experimental.numpyro import sample
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
 from softcvi.models import AbstractGuide, AbstractModel
+
 from softcvi_validation.tasks.tasks import AbstractTask
 
 
 class LinearRegressionModel(AbstractModel):
+    """The model for the linear regression task.
+
+    Args:
+    key: The key used to generate the covariate data.
+    """
+
     reparameterized: bool | None
     observed_names = {"y"}
     reparam_names = set()
@@ -64,6 +73,8 @@ class LinearRegressionModel(AbstractModel):
 
 
 class LinearRegressionGuide(AbstractGuide):
+    """Independent normal guide for the linear regression task."""
+
     beta: Normal
     bias: Normal
 
@@ -77,9 +88,16 @@ class LinearRegressionGuide(AbstractGuide):
 
 
 class LinearRegressionTask(AbstractTask):
+    """A Bayesian linear regression task.
+
+    Args:
+        key: Jax random seed, used to generate toy covariate data.
+    """
+
     model: LinearRegressionModel
     guide: LinearRegressionGuide
     name = "linear_regression"
+    learning_rate = 2e-3
 
     def __init__(self, key: PRNGKeyArray):
         self.model = LinearRegressionModel(key)

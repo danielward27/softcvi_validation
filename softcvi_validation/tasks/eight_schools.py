@@ -1,3 +1,5 @@
+"""The eight schools task."""
+
 from typing import ClassVar
 
 import equinox as eqx
@@ -17,6 +19,7 @@ from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
 from softcvi.models import AbstractGuide, AbstractModel
+
 from softcvi_validation.distributions import Folded
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
@@ -63,7 +66,7 @@ class EightSchoolsModel(AbstractModel):
 
 
 class EightSchoolsGuide(AbstractGuide):
-    """Eight schools guide using MLPs to parameterize simple distributions."""
+    """Eight schools guide."""
 
     theta_base: AbstractDistribution
     mu_base: AbstractDistribution
@@ -81,11 +84,26 @@ class EightSchoolsGuide(AbstractGuide):
 
 
 class EightSchoolsTask(AbstractTaskWithFileReference):
+    """The eight schools task.
+
+    A classic hierarchical Bayesian inference problem, where the aim is to infer the
+    treatment effects of a coaching program applied to eight schools, which are assumed
+    to be exchangeable.
+
+    Ref:
+        Donald B Rubin. “Estimation in parallel randomized experiments”. In: Journal of
+            Educational Statistics 6.4 (1981), pp. 377–401.
+        Andrew Gelman et al. Bayesian data analysis. Chapman and Hall/CRC, 1995.
+
+    Args:
+        key: Ignored, but provided for consistency of API.
+    """
+
     model: EightSchoolsModel
     guide: EightSchoolsGuide
     name = "eight_schools"
+    learning_rate = 1e-3
 
     def __init__(self, key):
-        # accepts key for consistency in API
         self.model = EightSchoolsModel()
         self.guide = EightSchoolsGuide()

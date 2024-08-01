@@ -1,12 +1,25 @@
+"""Contains the script for running the inference algorithms for a task.
+
+From the project root directory, a run can be carried out using:
+
+``python -m scripts.run_task --seed=0 --task-name="eight_schools"``
+
+"""
+
 import argparse
 import os
 from functools import partial
+from time import time
 
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jaxtyping
 import optax
+from jaxtyping import Array, PRNGKeyArray
+
+jax.config.update("jax_enable_x64", val=True)
+
 
 with jaxtyping.install_import_hook(
     ["softcvi", "softcvi_validation"],
@@ -14,16 +27,12 @@ with jaxtyping.install_import_hook(
 ):
     from flowjax.train.variational_fit import fit_to_variational_target
     from softcvi import losses
-    from softcvi.models import AbstractGuide
+    from softcvi.models import AbstractGuide, AbstractModel
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
     from softcvi_validation.tasks.tasks import AbstractTask
 
-
-from time import time
-
-from jaxtyping import Array, PRNGKeyArray
 
 os.chdir(utils.get_abspath_project_root())
 
@@ -40,49 +49,20 @@ def time_wrapper(fn):
     return wrapped
 
 
-def run_task(
-    *,
-    seed: int,
-    task_name: str,
-    steps: int,
+def get_losses(
+    model: AbstractModel,
+    obs: dict,
     n_particles: int,
-    save_n_samples: int,
-    negative_distribution: bool,
-    show_progress: bool,
+    negative_distribution: str,
 ):
-    results_dir = f"{os.getcwd()}/results/{task_name}"
-
-    key, subkey = jr.split(jr.PRNGKey(seed))
-    task = get_available_tasks()[task_name](subkey)
-
-    key, subkey = jr.split(key)
-    true_latents, obs = task.get_latents_and_observed_and_validate(subkey)
-
-    optimizer = optax.apply_if_finite(
-        optax.chain(
-            optax.clip_by_global_norm(10.0),
-            optax.adam(1e-3),
-        ),
-        max_consecutive_errors=100,
-    )
-
-    train_fn = time_wrapper(
-        partial(
-            fit_to_variational_target,
-            steps=steps,
-            show_progress=show_progress,
-            return_best=False,
-            optimizer=optimizer,
-        ),
-    )
-
+    """Get the loss functions under consideration."""
     kwargs = {
-        "model": task.model.reparam(set_val=True),
+        "model": model.reparam(set_val=True),
         "obs": obs,
         "n_particles": n_particles,
     }
 
-    loss_choices = {
+    return {
         "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
             **kwargs,
             alpha=0,
@@ -101,6 +81,62 @@ def run_task(
         "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
         "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
     }
+
+
+def run_task(
+    *,
+    seed: int,
+    task_name: str,
+    steps: int,
+    n_particles: int,
+    save_n_samples: int,
+    negative_distribution: bool,
+    show_progress: bool,
+):
+    """Run the task for each inference method, saving metrics and samples.
+
+    Args:
+        seed: Integer seed value.
+        task_name: The task name to run (see ``get_available_tasks``).
+        steps: Number of optimization steps to take.
+        n_particles: Number of particles to use in loss approximation.
+        save_n_samples: Number of posterior samples to save.
+        negative_distribution: The negative distribution to use for
+            ``SoftContrastiveEstimationLoss``.
+        show_progress: Whether to show the progress bar.
+    """
+    results_dir = f"{os.getcwd()}/results/{task_name}"
+
+    key, subkey = jr.split(jr.PRNGKey(seed))
+    task = get_available_tasks()[task_name](subkey)
+
+    key, subkey = jr.split(key)
+    true_latents, obs = task.get_latents_and_observed_and_validate(subkey)
+
+    optimizer = optax.apply_if_finite(
+        optax.chain(
+            optax.clip_by_global_norm(10.0),
+            optax.adam(task.learning_rate),
+        ),
+        max_consecutive_errors=100,
+    )
+
+    train_fn = time_wrapper(
+        partial(
+            fit_to_variational_target,
+            steps=steps,
+            show_progress=show_progress,
+            return_best=False,
+            optimizer=optimizer,
+        ),
+    )
+
+    loss_choices = get_losses(
+        model=task.model,
+        obs=obs,
+        n_particles=n_particles,
+        negative_distribution=negative_distribution,
+    )
 
     key, subkey = jr.split(key)
 
@@ -148,6 +184,7 @@ def compute_metrics(
     obs: dict,
     reference_samples: dict[str, Array],
 ):
+    """Compute the performance metrics."""
     key1, key2 = jr.split(key)
     kwargs = {"guide": guide, "obs": obs, "reference_samples": reference_samples}
     return {
@@ -174,7 +211,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="softcvi")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--task-name", type=str)
-    parser.add_argument("--steps", type=int, default=100000)
+    parser.add_argument("--steps", type=int, default=50000)
     parser.add_argument("--n-particles", type=int, default=8)
     parser.add_argument("--save-n-samples", type=int, default=1000)
     parser.add_argument("--negative-distribution", type=str, default="proposal")

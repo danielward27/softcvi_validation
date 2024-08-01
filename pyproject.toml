@@ -16,7 +16,7 @@ description = "Experiments for softcvi package."
 name = "softcvi_validation"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.0.0"
+version = "0.1.0"
 
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
