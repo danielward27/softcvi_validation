@@ -1,3 +1,5 @@
+"""Extra flowjax distributions."""
+
 from collections.abc import Callable
 from typing import ClassVar, Literal
 
@@ -203,62 +205,11 @@ class _PositiveImproperUniformBase(AbstractDistribution):
 
 
 class PositiveImproperUniform(AbstractTransformed):
+    """Improper uniform distribution over the positive space."""
+
     base_dist: _PositiveImproperUniformBase
     bijection: SoftPlus
 
     def __init__(self, shape: tuple[int, ...] = ()):
         self.base_dist = _PositiveImproperUniformBase(shape)
         self.bijection = SoftPlus(shape)
-
-
-# class JointDistribution(AbstractDistribution):
-#     """Stack unconditional univariate distributions into a joint distribution."""
-
-#     dists: tuple[AbstractDistribution, ...]
-#     shape: tuple[int, ...]
-#     cond_shape: ClassVar[None] = None
-
-#     def __init__(self, *dists):
-#         self.dists = tuple(dists)
-#         self.shape = (len(dists),)
-
-#     def _sample(self, key, condition=None):
-#         keys = jr.split(key, len(self.dists))
-#         samples = tuple(d.sample(k) for d, k in zip(self.dists, keys, strict=True))
-#         return jr.stack(samples)
-
-#     def _log_prob(self, x, condition=None):
-#         log_probs = (d.log_prob(xi) for d, xi in zip(self.dists, x))
-#         return sum(log_probs)
-
-
-# from flowjax.bijections import Identity, Stack
-
-
-# class JointTransformed(AbstractTransformed):
-#     """Stack univariate distributions into a joint distribution"""
-
-#     base_dist: JointDistribution
-#     bijection: Stack
-
-#     def __init__(*dists):
-#         base_distributions = []
-#         bijections = []
-
-#         for d in dists:
-#             if isinstance(d, AbstractTransformed):
-#                 d = d.merge_transforms()
-#                 base_distributions.append(d.base_dist)
-#                 bijections.append(d.bijection)
-#             else:
-#                 base_distributions.append()
-
-#         base_dists = (
-#             d.base_dist if isinstance(d, AbstractTransformed) else d for d in dists
-#         )
-#         transforms = (
-#             d.bijection if isinstance(d, AbstractTransformed) else Identity()
-#             for d in dists
-#         )
-#         self.base_dist = JointDistribution(*base_dists)
-#         self.transform = Stack

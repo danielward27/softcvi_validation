@@ -1,3 +1,5 @@
+"""Posterior performance metrics."""
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -5,6 +7,7 @@ import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
 from softcvi.models import AbstractGuide, AbstractModel
+
 from softcvi_validation.tasks.tasks import AbstractTask
 
 
@@ -30,7 +33,7 @@ def coverage_probabilities(
         guide: The guide.
         obs: The set of observations.
         reference_samples: The set of reference samples.
-        n: How many guide samples to use for inferring the highest density region.
+        n_samps: How many guide samples to use for inferring the highest density region.
             Defaults to 5000.
         nominal_percentiles: The nominal percentiles of the credible region to consider.
             Defaults to ``jnp.linspace(0, 100, 100)``.
@@ -77,6 +80,11 @@ def negative_posterior_mean_l2(
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
 ):
+    """Calculates the posterior mean accuracy.
+
+    This is the negative l2-norm of the difference between the means of the approximate
+    and reference samples, after scaling by the scale of the reference samples.
+    """
 
     @eqx.filter_vmap
     def _to_matrix(samples: dict):
@@ -106,6 +114,15 @@ def mean_log_prob_reference(
     obs: dict[str, Array],
     reference_samples: dict[str, Array],
 ):
+    """Calculate the mean log probability of the reference samples, in the guide.
+
+    Args:
+        model: The model.
+        guide: The guide.
+        obs: Dictionary of observations.
+        reference_samples: The reference samples, with a leading batch dimension.
+    """
+
     @_map_wrapper
     def _log_prob(samps):
         return guide.log_prob_original_space(samps, model=model, obs=obs)

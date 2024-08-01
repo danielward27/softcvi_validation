@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import pytest
+
 from softcvi_validation.distributions import (
     PositiveImproperUniform,
     UniformWithLogisticBase,

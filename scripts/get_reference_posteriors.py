@@ -1,4 +1,5 @@
-# %%
+"""Extract the reference posteriors from posteriordb/sbibm."""
+
 import bz2
 import io
 import json
@@ -13,6 +14,7 @@ import requests
 
 
 def get_slcp_posterior():
+    """Get the reference posterior from sbibm for the SLCP task."""
     obs = []
     latents = []
 
@@ -40,6 +42,7 @@ def get_slcp_posterior():
 
 
 def get_posteriordb_posterior(name):
+    """Get a posterior from posteriordb."""
     url = f"https://github.com/stan-dev/posteriordb/raw/0.5.0/posterior_database/reference_posteriors/draws/draws/{name}.json.zip"
 
     response = requests.get(url)
@@ -68,6 +71,7 @@ def get_posteriordb_posterior(name):
 
 
 def get_posteriordb_data(name):
+    """Extract data for a posterior db task (observations, hyperparameters etc.)."""
     url = f"https://github.com/stan-dev/posteriordb/raw/0.5.0/posterior_database/data/data/{name}.json.zip"
     response = requests.get(url)
     response.raise_for_status()
@@ -80,6 +84,7 @@ def get_posteriordb_data(name):
 
 
 def get_eight_schools_posterior():
+    """Get the reference posterior for the eight schools task."""
     latents = get_posteriordb_posterior("eight_schools-eight_schools_noncentered")
     obs = {"y": get_posteriordb_data("eight_schools")["y"][np.newaxis, ...]}
     np.savez("reference_posteriors/eight_schools/latents.npz", **latents)
@@ -87,6 +92,7 @@ def get_eight_schools_posterior():
 
 
 def get_garch_posterior():
+    """Get the reference posterior for the garch task."""
     latents = get_posteriordb_posterior("garch-garch11")
     obs = {"y": get_posteriordb_data("garch")["y"][np.newaxis, ...]}
     np.savez("reference_posteriors/garch/latents.npz", **latents)
@@ -98,5 +104,3 @@ if __name__ == "__main__":
     get_eight_schools_posterior()
     get_slcp_posterior()
     get_garch_posterior()
-
-# %%
