@@ -27,4 +27,4 @@ text.usetex : True
 text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb}
 
 # Default figure size equal to \textwidth
-figure.figsize: 5.15, 4
+figure.figsize: 5.5, 4
