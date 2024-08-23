@@ -8,8 +8,6 @@ from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
 from softcvi.models import AbstractGuide, AbstractModel
 
-from softcvi_validation.tasks.tasks import AbstractTask
-
 
 def coverage_probabilities(
     key: PRNGKeyArray,
@@ -74,7 +72,7 @@ def coverage_probabilities(
 def negative_posterior_mean_l2(
     key: PRNGKeyArray,
     *,
-    task: AbstractTask,
+    model: AbstractModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
@@ -94,7 +92,7 @@ def negative_posterior_mean_l2(
     @_map_wrapper
     def sample_guide_original_space(key):
         guide_samp = guide.sample(key)
-        return task.model.latents_to_original_space(guide_samp, obs=obs)
+        return model.latents_to_original_space(guide_samp, obs=obs)
 
     key, subkey = jr.split(key)
     guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))

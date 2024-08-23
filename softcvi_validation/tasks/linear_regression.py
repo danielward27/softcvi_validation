@@ -10,6 +10,7 @@ from flowjax.distributions import (
     Normal,
 )
 from flowjax.experimental.numpyro import sample
+from flowjax.wrappers import NonTrainable, non_trainable, unwrap
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
 from softcvi.models import AbstractGuide, AbstractModel
@@ -30,10 +31,11 @@ class LinearRegressionModel(AbstractModel):
     sigma: float | int
     n_covariates: ClassVar[int] = 50
     n_obs: ClassVar[int] = 200
-    x: Float[Array, "200 50"]
+    x: NonTrainable[Float[Array, "200 50"]]
 
     def __init__(self, key: PRNGKeyArray):
-        self.x = jr.normal(key, (self.n_obs, self.n_covariates))
+        x = jr.normal(key, (self.n_obs, self.n_covariates))
+        self.x = non_trainable(x)
         self.reparameterized = None
         self.sigma = 1
 
@@ -41,8 +43,8 @@ class LinearRegressionModel(AbstractModel):
         self,
         obs: dict[str, Float[Array, " 200"]] | None = None,
     ):
+        self = unwrap(self)
         obs = obs["y"] if obs is not None else None
-
         beta = sample("beta", Normal(jnp.zeros(self.n_covariates)))
         bias = sample("bias", Normal())
 
@@ -51,6 +53,7 @@ class LinearRegressionModel(AbstractModel):
             sample("y", ndist.Normal(mu, self.sigma), obs=obs)
 
     def get_true_posterior(self, obs: dict):
+        self = unwrap(self)
         x = jnp.concatenate((jnp.ones((self.n_obs, 1)), self.x), axis=1)
         prior_means = jnp.zeros(x.shape[1])
         error_precision = 1 / self.sigma**2

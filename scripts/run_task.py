@@ -50,14 +50,12 @@ def time_wrapper(fn):
 
 
 def get_losses(
-    model: AbstractModel,
     obs: dict,
     n_particles: int,
     negative_distribution: str,
 ):
     """Get the loss functions under consideration."""
     kwargs = {
-        "model": model.reparam(set_val=True),
         "obs": obs,
         "n_particles": n_particles,
     }
@@ -132,7 +130,6 @@ def run_task(
     )
 
     loss_choices = get_losses(
-        model=task.model,
         obs=obs,
         n_particles=n_particles,
         negative_distribution=negative_distribution,
@@ -142,30 +139,31 @@ def run_task(
 
     for method_name, loss in loss_choices.items():
 
-        (posterior, _), run_time = train_fn(
+        # Returns (((model, guide), losses), runtime)
+        ((model, posterior), _), run_time = train_fn(
             subkey,
-            task.guide,
+            (task.model.reparam(set_val=True), task.guide),
             loss_fn=loss,
         )
 
         metrics = compute_metrics(
             key,
-            task=task,
+            model=model,
             guide=posterior,
             obs=obs,
             reference_samples=true_latents,
         )
         metrics["run_time"] = run_time
 
-        @partial(jax.vmap, in_axes=[0, None])
-        def sample_posterior(key, posterior):
+        @partial(jax.vmap, in_axes=[0, None, None])
+        def sample_posterior(key, posterior, model):
             sample = posterior.sample(key)
-            return task.model.latents_to_original_space(sample, obs=obs)
+            return model.latents_to_original_space(sample, obs=obs)
 
         postfix = f"_seed={seed}_k={n_particles}_negative={negative_distribution}.npz"
 
         key, subkey = jr.split(key)
-        samples = sample_posterior(jr.split(subkey, save_n_samples), posterior)
+        samples = sample_posterior(jr.split(subkey, save_n_samples), posterior, model)
         jnp.savez(f"{results_dir}/metrics/{method_name}{postfix}", **metrics)
         jnp.savez(f"{results_dir}/samples/{method_name}{postfix}", **samples)
 
@@ -179,27 +177,29 @@ def run_task(
 def compute_metrics(
     key: PRNGKeyArray,
     *,
-    task: AbstractTask,
+    model: AbstractModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
 ):
     """Compute the performance metrics."""
     key1, key2 = jr.split(key)
-    kwargs = {"guide": guide, "obs": obs, "reference_samples": reference_samples}
+    kwargs = {
+        "model": model,
+        "guide": guide,
+        "obs": obs,
+        "reference_samples": reference_samples,
+    }
     return {
         "mean_log_prob_reference": metrics.mean_log_prob_reference(
-            model=task.model,
             **kwargs,
         ),
         "coverage_probabilities": metrics.coverage_probabilities(
             key1,
-            model=task.model,
             **kwargs,
         ),
         "negative_posterior_mean_l2": metrics.negative_posterior_mean_l2(
             key2,
-            task=task,
             **kwargs,
         ),
     }

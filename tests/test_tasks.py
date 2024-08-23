@@ -16,6 +16,3 @@ def test_tasks(task):
         model_trace=shape_only_trace(task.model.reparam(set_val=True), obs=obs),
         guide_trace=shape_only_trace(task.guide),
     )
-
-
-# %%
