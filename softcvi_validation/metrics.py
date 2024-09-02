@@ -6,13 +6,13 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
 
 def coverage_probabilities(
     key: PRNGKeyArray,
     *,
-    model: AbstractModel,
+    model: AbstractReparameterizedModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
@@ -42,13 +42,13 @@ def coverage_probabilities(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key)
+        guide_samp = guide.sample(key, obs=obs)
         return model.latents_to_original_space(guide_samp, obs=obs)
 
     @eqx.filter_jit
     @_map_wrapper
     def log_prob_original_space(latents):
-        return guide.log_prob_original_space(latents, obs=obs, model=model)
+        return guide.log_prob_original_space(latents, model=model, obs=obs)
 
     key, subkey = jr.split(key)
     guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
@@ -72,7 +72,7 @@ def coverage_probabilities(
 def negative_posterior_mean_l2(
     key: PRNGKeyArray,
     *,
-    model: AbstractModel,
+    model: AbstractReparameterizedModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
@@ -91,7 +91,7 @@ def negative_posterior_mean_l2(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key)
+        guide_samp = guide.sample(key, obs=obs)
         return model.latents_to_original_space(guide_samp, obs=obs)
 
     key, subkey = jr.split(key)
@@ -107,7 +107,7 @@ def negative_posterior_mean_l2(
 
 
 def mean_log_prob_reference(
-    model: AbstractModel,
+    model: AbstractReparameterizedModel,
     guide: AbstractGuide,
     obs: dict[str, Array],
     reference_samples: dict[str, Array],

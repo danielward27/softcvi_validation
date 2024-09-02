@@ -7,10 +7,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractModel
-from softcvi.numpyro_utils import (
-    validate_data_and_model_match,
-)
+from softcvi.models import AbstractGuide, AbstractReparameterizedModel, _check_present
 
 from softcvi_validation.utils import get_abspath_project_root
 
@@ -18,29 +15,10 @@ from softcvi_validation.utils import get_abspath_project_root
 class AbstractTask(eqx.Module):
     """A model, guide and method for generating ground truth samples."""
 
-    model: eqx.AbstractVar[AbstractModel]
+    model: eqx.AbstractVar[AbstractReparameterizedModel]
     guide: eqx.AbstractVar[AbstractGuide]
     name: eqx.AbstractClassVar[str]
     learning_rate: eqx.AbstractVar[float]
-    # TODO support auxilary variables?
-    # def __check_init__(self):
-    #     model = self.model.reparam()
-    #     model_trace = shape_only_trace(model)
-    #     obs = {}
-    #     for name in model.observed_names:
-    #         if name not in model_trace:
-    #             raise ValueError(
-    #                 f"Trace of model does not include observed node {name}.",
-    #             )
-    #         obs[name] = jnp.empty(
-    #             shape=model_trace[name]["value"].shape,
-    #             dtype=model_trace[name]["value"].dtype,
-    #         )  # keep runtime type checker happy
-
-    #     check_model_guide_match(
-    #         model_trace=shape_only_trace(model, obs=obs),
-    #         guide_trace=shape_only_trace(self.guide),
-    #     )
 
     @abstractmethod
     def get_latents_and_observed(
@@ -71,19 +49,11 @@ class AbstractTask(eqx.Module):
     def _validate_data(self, latents: dict[str, Array], obs: dict[str, Array]):
         """Validate data matches model with a batch dimension in latents."""
         model = self.model.reparam(set_val=False)
-        validate_data_and_model_match(
-            obs,
-            model,
-            assert_present=model.observed_names,
-            obs=obs,
-        )
-        validate_latents_fn = partial(
-            validate_data_and_model_match,
-            model=model,
-            assert_present=model.latent_names,
-            obs=obs,
-        )
+        model.validate_data(obs, obs=obs)
+        validate_latents_fn = partial(model.validate_data, obs=obs)
         eqx.filter_vmap(validate_latents_fn)(latents)
+        _check_present(model.observed_names, obs)
+        _check_present(model.latent_names, latents)
 
 
 class AbstractTaskWithFileReference(AbstractTask):

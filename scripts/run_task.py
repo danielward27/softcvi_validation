@@ -18,20 +18,16 @@ import jaxtyping
 import optax
 from jaxtyping import Array, PRNGKeyArray
 
-jax.config.update("jax_enable_x64", val=True)
-
-
 with jaxtyping.install_import_hook(
     ["softcvi", "softcvi_validation"],
     "beartype.beartype",
 ):
     from flowjax.train.variational_fit import fit_to_variational_target
     from softcvi import losses
-    from softcvi.models import AbstractGuide, AbstractModel
+    from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
-    from softcvi_validation.tasks.tasks import AbstractTask
 
 
 os.chdir(utils.get_abspath_project_root())
@@ -54,31 +50,31 @@ def get_losses(
     n_particles: int,
     negative_distribution: str,
 ):
-    """Get the loss functions under consideration."""
-    kwargs = {
-        "obs": obs,
-        "n_particles": n_particles,
-    }
+    """Get the loss functions under consideration (assumes fixed observation)."""
 
-    return {
+    loss_choices = {
         "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=0,
             negative_distribution=negative_distribution,
         ),
         "SoftCVI(a=0.75)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=0.75,
             negative_distribution=negative_distribution,
         ),
         "SoftCVI(a=1)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=1,
             negative_distribution=negative_distribution,
         ),
-        "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
-        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
+        "ELBO": losses.EvidenceLowerBoundLoss(n_particles=n_particles),
+        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(
+            n_particles=n_particles,
+        ),
     }
+
+    return {k: partial(loss, obs=obs) for k, loss in loss_choices.items()}
 
 
 def run_task(
@@ -177,7 +173,7 @@ def run_task(
 def compute_metrics(
     key: PRNGKeyArray,
     *,
-    model: AbstractModel,
+    model: AbstractReparameterizedModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
@@ -190,6 +186,7 @@ def compute_metrics(
         "obs": obs,
         "reference_samples": reference_samples,
     }
+
     return {
         "mean_log_prob_reference": metrics.mean_log_prob_reference(
             **kwargs,

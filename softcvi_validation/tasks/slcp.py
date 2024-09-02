@@ -14,12 +14,12 @@ from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from flowjax.wrappers import NonTrainable, non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
-class SLCPModel(AbstractModel):
+class SLCPModel(AbstractReparameterizedModel):
     """The model for the SLCP task."""
 
     reparameterized: bool | None = None
@@ -73,7 +73,7 @@ class SLCPGuide(AbstractGuide):
         )
         self.theta = flow
 
-    def __call__(self):
+    def __call__(self, obs: dict[str, Array] | None = None):
         sample("theta", self.theta)
 
 
