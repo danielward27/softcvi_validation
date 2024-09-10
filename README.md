@@ -13,7 +13,7 @@ python -m scripts.run_task --seed=0 --task-name="eight_schools"
 ```
 
 ## Constructing the environment
-The exact environment used in the experiments is in [softcvi.yml](softcvi.yml).
+The exact conda environment used in the experiments is in [softcvi.yml](softcvi.yml).
 However, this likely will not be compatible across platforms. A less precise, but more
 convenient way to recreate the environment is to clone ``softcvi`` and
 ``softcvi_validation`` into your current directory, and run:
