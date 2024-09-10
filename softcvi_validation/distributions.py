@@ -12,8 +12,8 @@ from flowjax.distributions import (
     AbstractTransformed,
     Logistic,
 )
-from flowjax.utils import arraylike_to_array
-from flowjax.wrappers import AbstractUnwrappable, BijectionReparam, NonTrainable, unwrap
+from flowjax.utils import arraylike_to_array, inv_softplus
+from flowjax.wrappers import AbstractUnwrappable, NonTrainable, Parameterize, unwrap
 from jax.flatten_util import ravel_pytree
 from jax.nn import softplus
 from jax.scipy.special import logsumexp
@@ -52,7 +52,7 @@ class TruncNormal(AbstractDistribution):
             arraylike_to_array(loc, dtype=float),
             arraylike_to_array(scale, dtype=float),
         )
-        self.scale = BijectionReparam(scale, SoftPlus())
+        self.scale = Parameterize(softplus, inv_softplus(scale))
         self.lower, self.upper = lower, upper
         self.shape = self.loc.shape
 

@@ -17,13 +17,13 @@ from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import constraints
-from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
 from softcvi_validation.distributions import MLPParameterizedDistribution
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
-class GARCHModel(AbstractModel):
+class GARCHModel(AbstractReparameterizedModel):
     """The GARCH(1,1) model."""
 
     reparameterized: bool | None
@@ -96,7 +96,7 @@ class GARCHGuide(AbstractGuide):
             final_activation=lambda x: x / 5,  # At initialization prefer smaller vals
         )
 
-    def __call__(self):
+    def __call__(self, obs: dict[str, Array] | None = None):
         sample("mu", self.mu)
         alpha0 = sample("alpha0", self.alpha0)
         alpha1 = sample("alpha1", self.alpha1)

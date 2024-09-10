@@ -18,7 +18,7 @@ from flowjax.utils import arraylike_to_array
 from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
-from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
 from softcvi_validation.distributions import Folded
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
@@ -45,7 +45,7 @@ def get_folded_distribution(
     return Transformed(Folded(dist), Scale(scale))
 
 
-class EightSchoolsModel(AbstractModel):
+class EightSchoolsModel(AbstractReparameterizedModel):
     """Eight schools model."""
 
     reparameterized: bool | None = None
@@ -77,7 +77,7 @@ class EightSchoolsGuide(AbstractGuide):
         self.tau_base = get_folded_distribution(StudentT, df=5)
         self.theta_base = StudentT(df=jnp.full((8,), 5))
 
-    def __call__(self):
+    def __call__(self, obs: dict[str, Array] | None = None):
         sample("mu_base", self.mu_base)
         sample("tau_base", self.tau_base)
         sample("theta_base", self.theta_base)

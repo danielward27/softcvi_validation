@@ -10,9 +10,10 @@ from flowjax.distributions import (
     Normal,
 )
 from flowjax.experimental.numpyro import sample
+from flowjax.wrappers import NonTrainable, non_trainable, unwrap
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
-from softcvi.models import AbstractGuide, AbstractModel
+from softcvi.models import AbstractGuide, AbstractModel, ModelToReparameterized
 
 from softcvi_validation.tasks.tasks import AbstractTask
 
@@ -24,25 +25,23 @@ class LinearRegressionModel(AbstractModel):
     key: The key used to generate the covariate data.
     """
 
-    reparameterized: bool | None
     observed_names = {"y"}
-    reparam_names = set()
     sigma: float | int
     n_covariates: ClassVar[int] = 50
     n_obs: ClassVar[int] = 200
-    x: Float[Array, "200 50"]
+    x: NonTrainable[Float[Array, "200 50"]]
 
     def __init__(self, key: PRNGKeyArray):
-        self.x = jr.normal(key, (self.n_obs, self.n_covariates))
-        self.reparameterized = None
+        x = jr.normal(key, (self.n_obs, self.n_covariates))
+        self.x = non_trainable(x)
         self.sigma = 1
 
-    def call_without_reparam(
+    def __call__(
         self,
         obs: dict[str, Float[Array, " 200"]] | None = None,
     ):
+        self = unwrap(self)
         obs = obs["y"] if obs is not None else None
-
         beta = sample("beta", Normal(jnp.zeros(self.n_covariates)))
         bias = sample("bias", Normal())
 
@@ -51,6 +50,7 @@ class LinearRegressionModel(AbstractModel):
             sample("y", ndist.Normal(mu, self.sigma), obs=obs)
 
     def get_true_posterior(self, obs: dict):
+        self = unwrap(self)
         x = jnp.concatenate((jnp.ones((self.n_obs, 1)), self.x), axis=1)
         prior_means = jnp.zeros(x.shape[1])
         error_precision = 1 / self.sigma**2
@@ -82,7 +82,7 @@ class LinearRegressionGuide(AbstractGuide):
         self.beta = Normal(jnp.zeros(LinearRegressionModel.n_covariates))
         self.bias = Normal()
 
-    def __call__(self):
+    def __call__(self, obs: dict[str, Array] | None = None):
         sample("beta", self.beta)
         sample("bias", self.bias)
 
@@ -94,13 +94,13 @@ class LinearRegressionTask(AbstractTask):
         key: Jax random seed, used to generate toy covariate data.
     """
 
-    model: LinearRegressionModel
+    model: ModelToReparameterized
     guide: LinearRegressionGuide
     name = "linear_regression"
     learning_rate = 2e-3
 
     def __init__(self, key: PRNGKeyArray):
-        self.model = LinearRegressionModel(key)
+        self.model = ModelToReparameterized(LinearRegressionModel(key))
         self.guide = LinearRegressionGuide()
 
     def get_latents_and_observed(
@@ -110,7 +110,7 @@ class LinearRegressionTask(AbstractTask):
         obs_key, posterior_key = jr.split(key)
         obs = self.model.reparam(set_val=False).sample(obs_key)
         obs = {k: obs[k] for k in self.model.observed_names}
-        posterior = self.model.get_true_posterior(obs)
+        posterior = self.model.model.get_true_posterior(obs)
 
         keys = jr.split(posterior_key, len(posterior))
         latents = {

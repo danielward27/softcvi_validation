@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=4GB
 #SBATCH --account=math026082
-#SBATCH --array=0-20
+#SBATCH --array=0-50
 #SBATCH --output=%x_%A_%a.out
 
 TASK_NAME=$1

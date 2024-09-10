@@ -18,20 +18,16 @@ import jaxtyping
 import optax
 from jaxtyping import Array, PRNGKeyArray
 
-jax.config.update("jax_enable_x64", val=True)
-
-
 with jaxtyping.install_import_hook(
     ["softcvi", "softcvi_validation"],
     "beartype.beartype",
 ):
     from flowjax.train.variational_fit import fit_to_variational_target
     from softcvi import losses
-    from softcvi.models import AbstractGuide, AbstractModel
+    from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
-    from softcvi_validation.tasks.tasks import AbstractTask
 
 
 os.chdir(utils.get_abspath_project_root())
@@ -50,37 +46,35 @@ def time_wrapper(fn):
 
 
 def get_losses(
-    model: AbstractModel,
-    obs: dict,
     n_particles: int,
     negative_distribution: str,
+    obs: dict | None = None,
 ):
     """Get the loss functions under consideration."""
-    kwargs = {
-        "model": model.reparam(set_val=True),
-        "obs": obs,
-        "n_particles": n_particles,
-    }
-
-    return {
+    loss_choices = {
         "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=0,
             negative_distribution=negative_distribution,
         ),
         "SoftCVI(a=0.75)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=0.75,
             negative_distribution=negative_distribution,
         ),
         "SoftCVI(a=1)": losses.SoftContrastiveEstimationLoss(
-            **kwargs,
+            n_particles=n_particles,
             alpha=1,
             negative_distribution=negative_distribution,
         ),
-        "ELBO": losses.EvidenceLowerBoundLoss(**kwargs),
-        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(**kwargs),
+        "ELBO": losses.EvidenceLowerBoundLoss(n_particles=n_particles),
+        "SNIS-fKL": losses.SelfNormImportanceWeightedForwardKLLoss(
+            n_particles=n_particles,
+        ),
     }
+    if obs is not None:
+        loss_choices = {k: partial(loss, obs=obs) for k, loss in loss_choices.items()}
+    return loss_choices
 
 
 def run_task(
@@ -132,40 +126,40 @@ def run_task(
     )
 
     loss_choices = get_losses(
-        model=task.model,
-        obs=obs,
         n_particles=n_particles,
         negative_distribution=negative_distribution,
+        obs=obs,
     )
 
     key, subkey = jr.split(key)
 
     for method_name, loss in loss_choices.items():
 
-        (posterior, _), run_time = train_fn(
+        # Returns (((model, guide), losses), runtime)
+        ((model, posterior), _), run_time = train_fn(
             subkey,
-            task.guide,
+            (task.model.reparam(set_val=True), task.guide),
             loss_fn=loss,
         )
 
         metrics = compute_metrics(
             key,
-            task=task,
+            model=model,
             guide=posterior,
             obs=obs,
             reference_samples=true_latents,
         )
         metrics["run_time"] = run_time
 
-        @partial(jax.vmap, in_axes=[0, None])
-        def sample_posterior(key, posterior):
+        @partial(jax.vmap, in_axes=[0, None, None])
+        def sample_posterior(key, posterior, model):
             sample = posterior.sample(key)
-            return task.model.latents_to_original_space(sample, obs=obs)
+            return model.latents_to_original_space(sample, obs=obs)
 
         postfix = f"_seed={seed}_k={n_particles}_negative={negative_distribution}.npz"
 
         key, subkey = jr.split(key)
-        samples = sample_posterior(jr.split(subkey, save_n_samples), posterior)
+        samples = sample_posterior(jr.split(subkey, save_n_samples), posterior, model)
         jnp.savez(f"{results_dir}/metrics/{method_name}{postfix}", **metrics)
         jnp.savez(f"{results_dir}/samples/{method_name}{postfix}", **samples)
 
@@ -179,27 +173,30 @@ def run_task(
 def compute_metrics(
     key: PRNGKeyArray,
     *,
-    task: AbstractTask,
+    model: AbstractReparameterizedModel,
     guide: AbstractGuide,
     obs: dict,
     reference_samples: dict[str, Array],
 ):
     """Compute the performance metrics."""
     key1, key2 = jr.split(key)
-    kwargs = {"guide": guide, "obs": obs, "reference_samples": reference_samples}
+    kwargs = {
+        "model": model,
+        "guide": guide,
+        "obs": obs,
+        "reference_samples": reference_samples,
+    }
+
     return {
         "mean_log_prob_reference": metrics.mean_log_prob_reference(
-            model=task.model,
             **kwargs,
         ),
         "coverage_probabilities": metrics.coverage_probabilities(
             key1,
-            model=task.model,
             **kwargs,
         ),
         "negative_posterior_mean_l2": metrics.negative_posterior_mean_l2(
             key2,
-            task=task,
             **kwargs,
         ),
     }
