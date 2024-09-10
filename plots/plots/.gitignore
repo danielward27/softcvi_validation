@@ -2,7 +2,7 @@
 !.gitignore
 !metrics_k=8_negative=proposal.pdf
 !metrics_k=8_negative=posterior.pdf
-!slcp_mass_covering_first_five_k=8_negative=proposal.pdf
+!slcp_mass_covering_first_six_k=8_negative=proposal.pdf
 !metrics_k=2_negative=proposal.pdf
 !run_times_k=8_negative=proposal.pdf
 !single_run_boxplots_k=8_negative=proposal.pdf

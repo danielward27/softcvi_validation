@@ -46,12 +46,11 @@ def time_wrapper(fn):
 
 
 def get_losses(
-    obs: dict,
     n_particles: int,
     negative_distribution: str,
+    obs: dict | None = None,
 ):
-    """Get the loss functions under consideration (assumes fixed observation)."""
-
+    """Get the loss functions under consideration."""
     loss_choices = {
         "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
             n_particles=n_particles,
@@ -73,8 +72,9 @@ def get_losses(
             n_particles=n_particles,
         ),
     }
-
-    return {k: partial(loss, obs=obs) for k, loss in loss_choices.items()}
+    if obs is not None:
+        loss_choices = {k: partial(loss, obs=obs) for k, loss in loss_choices.items()}
+    return loss_choices
 
 
 def run_task(
@@ -126,9 +126,9 @@ def run_task(
     )
 
     loss_choices = get_losses(
-        obs=obs,
         n_particles=n_particles,
         negative_distribution=negative_distribution,
+        obs=obs,
     )
 
     key, subkey = jr.split(key)
