@@ -35,7 +35,7 @@ dependencies:
       - cycler==0.12.1
       - equinox==0.11.4
       - etils==1.9.2
-      - flowjax==13.0.1
+      - flowjax==14.0.0
       - fonttools==4.53.1
       - idna==3.7
       - jax==0.4.30
@@ -59,8 +59,8 @@ dependencies:
       - scipy==1.14.0
       - seaborn==0.13.2
       - six==1.16.0
-      - softcvi==0.1.0
-      - softcvi-validation==0.1.0
+      - softcvi==0.2.0
+      - softcvi-validation==0.2.0
       - toolz==0.12.1
       - tqdm==4.66.4
       - typeguard==2.13.3
