@@ -13,7 +13,7 @@ def test_normalization_grad():
     variational = Normal(jnp.zeros(2))
     negative = variational  # Negative as same as variational
 
-    theta = jr.normal(jr.PRNGKey(0), (20, *variational.shape))
+    theta = jr.normal(jr.key(0), (20, *variational.shape))
     guide_params, guide_static = eqx.partition(variational, eqx.is_inexact_array)
 
     @jax.grad
