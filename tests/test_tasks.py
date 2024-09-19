@@ -8,7 +8,7 @@ from softcvi_validation.tasks.available_tasks import get_available_tasks
 
 @pytest.mark.parametrize("task", get_available_tasks().values())
 def test_tasks(task):
-    key = jr.PRNGKey(0)
+    key = jr.key(0)
     task = task(key)
     _, obs = task.get_latents_and_observed_and_validate(key)
 

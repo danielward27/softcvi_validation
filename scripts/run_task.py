@@ -101,7 +101,7 @@ def run_task(
     """
     results_dir = f"{os.getcwd()}/results/{task_name}"
 
-    key, subkey = jr.split(jr.PRNGKey(seed))
+    key, subkey = jr.split(jr.key(seed))
     task = get_available_tasks()[task_name](subkey)
 
     key, subkey = jr.split(key)

@@ -23,7 +23,7 @@ def test_folded():
 
 def test_truncnorm():
     tnorm = TruncNormal(lower=-2, upper=2, loc=1, scale=2)
-    samp = tnorm.sample(jr.PRNGKey(0), (1000,))
+    samp = tnorm.sample(jr.key(0), (1000,))
     assert samp.max() < tnorm.upper
     assert samp.max() > tnorm.upper - 0.1
 
