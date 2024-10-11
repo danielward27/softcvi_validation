@@ -14,12 +14,12 @@ from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
 from flowjax.wrappers import NonTrainable, non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from pyrox.program import AbstractProgram
 
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
-class SLCPModel(AbstractReparameterizedModel):
+class SLCPModel(AbstractProgram):
     """The model for the SLCP task."""
 
     reparameterized: bool | None = None
@@ -41,7 +41,7 @@ class SLCPModel(AbstractReparameterizedModel):
             sample("x", MultivariateNormal(mu, cov), obs=obs)
 
 
-class SLCPGuide(AbstractGuide):
+class SLCPGuide(AbstractProgram):
     """The guide used for the SLCP task.
 
     The guide is a masked autoregressive flow, with a rational quadratic spline

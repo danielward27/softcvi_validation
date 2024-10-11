@@ -23,8 +23,8 @@ with jaxtyping.install_import_hook(
     "beartype.beartype",
 ):
     from flowjax.train.variational_fit import fit_to_variational_target
+    from pyrox.program import AbstractProgram, ReparameterizedProgram
     from softcvi import losses
-    from softcvi.models import AbstractGuide, AbstractReparameterizedModel
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
@@ -173,8 +173,8 @@ def run_task(
 def compute_metrics(
     key: PRNGKeyArray,
     *,
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
+    model: AbstractProgram,
+    guide: AbstractProgram,
     obs: dict,
     reference_samples: dict[str, Array],
 ):

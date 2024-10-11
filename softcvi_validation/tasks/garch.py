@@ -17,18 +17,17 @@ from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import constraints
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from numpyro.infer.reparam import TransformReparam
+from pyrox.program import AbstractProgram, ReparameterizedProgram
 
 from softcvi_validation.distributions import MLPParameterizedDistribution
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
-class GARCHModel(AbstractReparameterizedModel):
+class GARCHModel(AbstractProgram):
     """The GARCH(1,1) model."""
 
     reparameterized: bool | None
-    observed_names = {"y"}
-    reparam_names = {"beta1"}
     sigma1: ClassVar[float] = 0.5
     time: ClassVar[int] = 200
 
@@ -61,7 +60,7 @@ class GARCHModel(AbstractReparameterizedModel):
         scan(step_fn, init=(jnp.array(self.sigma1), y0), xs=xs, length=self.time)
 
 
-class GARCHGuide(AbstractGuide):
+class GARCHGuide(AbstractProgram):
     """The guide used for the GARCH task.
 
     The guide uses a combination of simple distributions (for mu and alpha0), in
@@ -116,5 +115,8 @@ class GARCHTask(AbstractTaskWithFileReference):
     learning_rate = 5e-4
 
     def __init__(self, key: PRNGKeyArray):
-        self.model = GARCHModel()
+        self.model = ReparameterizedProgram(
+            GARCHModel(),
+            config={"beta1": TransformReparam},
+        )
         self.guide = GARCHGuide(key)

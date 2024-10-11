@@ -13,19 +13,18 @@ from flowjax.experimental.numpyro import sample
 from flowjax.wrappers import NonTrainable, non_trainable, unwrap
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
-from softcvi.models import AbstractGuide, AbstractModel, ModelToReparameterized
+from pyrox.program import AbstractProgram
 
 from softcvi_validation.tasks.tasks import AbstractTask
 
 
-class LinearRegressionModel(AbstractModel):
+class LinearRegressionModel(AbstractProgram):
     """The model for the linear regression task.
 
     Args:
     key: The key used to generate the covariate data.
     """
 
-    observed_names = {"y"}
     sigma: float | int
     n_covariates: ClassVar[int] = 50
     n_obs: ClassVar[int] = 200
@@ -38,7 +37,7 @@ class LinearRegressionModel(AbstractModel):
 
     def __call__(
         self,
-        obs: dict[str, Float[Array, " 200"]] | None = None,
+        obs: Float[Array, " 200"] | None = None,
     ):
         self = unwrap(self)
         obs = obs["y"] if obs is not None else None
@@ -72,7 +71,7 @@ class LinearRegressionModel(AbstractModel):
         }
 
 
-class LinearRegressionGuide(AbstractGuide):
+class LinearRegressionGuide(AbstractProgram):
     """Independent normal guide for the linear regression task."""
 
     beta: Normal
@@ -94,13 +93,13 @@ class LinearRegressionTask(AbstractTask):
         key: Jax random seed, used to generate toy covariate data.
     """
 
-    model: ModelToReparameterized
+    model: AbstractProgram
     guide: LinearRegressionGuide
     name = "linear_regression"
     learning_rate = 2e-3
 
     def __init__(self, key: PRNGKeyArray):
-        self.model = ModelToReparameterized(LinearRegressionModel(key))
+        self.model = LinearRegressionModel(key)
         self.guide = LinearRegressionGuide()
 
     def get_latents_and_observed(

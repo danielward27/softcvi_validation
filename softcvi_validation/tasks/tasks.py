@@ -7,7 +7,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel, _check_present
+from pyrox.program import AbstractProgram, _check_present
 
 from softcvi_validation.utils import get_abspath_project_root
 
@@ -15,8 +15,8 @@ from softcvi_validation.utils import get_abspath_project_root
 class AbstractTask(eqx.Module):
     """A model, guide and method for generating ground truth samples."""
 
-    model: eqx.AbstractVar[AbstractReparameterizedModel]
-    guide: eqx.AbstractVar[AbstractGuide]
+    model: eqx.AbstractVar[AbstractProgram]
+    guide: eqx.AbstractVar[AbstractProgram]
     name: eqx.AbstractClassVar[str]
     learning_rate: eqx.AbstractVar[float]
 

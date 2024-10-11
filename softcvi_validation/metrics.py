@@ -6,14 +6,14 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from pyrox.program import AbstractProgram
 
 
 def coverage_probabilities(
     key: PRNGKeyArray,
     *,
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
+    model: AbstractProgram,
+    guide: AbstractProgram,
     obs: dict,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
@@ -72,8 +72,8 @@ def coverage_probabilities(
 def negative_posterior_mean_l2(
     key: PRNGKeyArray,
     *,
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
+    model: AbstractProgram,
+    guide: AbstractProgram,
     obs: dict,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
@@ -107,8 +107,8 @@ def negative_posterior_mean_l2(
 
 
 def mean_log_prob_reference(
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
+    model: AbstractProgram,
+    guide: AbstractProgram,
     obs: dict[str, Array],
     reference_samples: dict[str, Array],
 ):
