@@ -7,7 +7,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from pyrox.program import AbstractProgram, _check_present, remove_reparam
+from pyrox.program import AbstractProgram, remove_reparam
 
 from softcvi_validation.utils import get_abspath_project_root
 

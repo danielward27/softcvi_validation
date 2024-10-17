@@ -19,12 +19,17 @@ import optax
 from jaxtyping import Array, PRNGKeyArray
 
 with jaxtyping.install_import_hook(
-    ["softcvi", "softcvi_validation"],
+    ["softcvi", "softcvi_validation", "pyrox"],
     "beartype.beartype",
 ):
     from flowjax.train import fit_to_key_based_loss
     from pyrox import losses
-    from pyrox.program import AbstractProgram, SetKwargs
+    from pyrox.program import (
+        AbstractProgram,
+        GuideToDataSpace,
+        ReparameterizedProgram,
+        SetKwargs,
+    )
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
@@ -146,9 +151,14 @@ def run_task(
         metrics["run_time"] = run_time
 
         @partial(jax.vmap, in_axes=[0, None, None])
-        def sample_posterior(key, posterior, model):
-            sample = posterior.sample(key)
-            return model.latents_to_original_space(sample, obs=obs)
+        def sample_posterior(key, guide, model):
+            if isinstance(model, ReparameterizedProgram):
+                guide = GuideToDataSpace(
+                    guide=guide,
+                    model=model,
+                    model_kwargs={"obs": obs},
+                )
+            return guide.sample(key)
 
         postfix = f"_seed={seed}_k={n_particles}_negative={negative_distribution}.npz"
 

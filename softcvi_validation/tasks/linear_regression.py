@@ -106,7 +106,7 @@ class LinearRegressionTask(AbstractTask):
     def get_latents_and_observed(
         self,
         key: Array,
-    ) -> tuple[dict[str, Array], dict[str, Array]]:
+    ) -> tuple[dict[str, Array], Array]:
         obs_key, posterior_key = jr.split(key)
         obs = self.model.sample(obs_key)
         obs = obs.pop(self.observed_name)
