@@ -40,7 +40,6 @@ class LinearRegressionModel(AbstractProgram):
         obs: Float[Array, " 200"] | None = None,
     ):
         self = unwrap(self)
-        obs = obs["y"] if obs is not None else None
         beta = sample("beta", Normal(jnp.zeros(self.n_covariates)))
         bias = sample("bias", Normal())
 
@@ -48,7 +47,7 @@ class LinearRegressionModel(AbstractProgram):
             mu = self.x @ beta + bias
             sample("y", ndist.Normal(mu, self.sigma), obs=obs)
 
-    def get_true_posterior(self, obs: dict):
+    def get_true_posterior(self, obs: Array):
         self = unwrap(self)
         x = jnp.concatenate((jnp.ones((self.n_obs, 1)), self.x), axis=1)
         prior_means = jnp.zeros(x.shape[1])
@@ -58,7 +57,7 @@ class LinearRegressionModel(AbstractProgram):
             error_precision * x.T @ x + prior_precision,
         )
         posterior_means = (
-            posterior_covariance @ (error_precision * x.T @ obs["y"])
+            posterior_covariance @ (error_precision * x.T @ obs)
             + prior_precision @ prior_means
         )
 
@@ -81,7 +80,7 @@ class LinearRegressionGuide(AbstractProgram):
         self.beta = Normal(jnp.zeros(LinearRegressionModel.n_covariates))
         self.bias = Normal()
 
-    def __call__(self, obs: dict[str, Array] | None = None):
+    def __call__(self):
         sample("beta", self.beta)
         sample("bias", self.bias)
 
@@ -97,6 +96,8 @@ class LinearRegressionTask(AbstractTask):
     guide: LinearRegressionGuide
     name = "linear_regression"
     learning_rate = 2e-3
+    observed_name = "y"
+    latent_names = frozenset({"beta", "bias"})
 
     def __init__(self, key: PRNGKeyArray):
         self.model = LinearRegressionModel(key)
@@ -107,10 +108,9 @@ class LinearRegressionTask(AbstractTask):
         key: Array,
     ) -> tuple[dict[str, Array], dict[str, Array]]:
         obs_key, posterior_key = jr.split(key)
-        obs = self.model.reparam(set_val=False).sample(obs_key)
-        obs = {k: obs[k] for k in self.model.observed_names}
-        posterior = self.model.model.get_true_posterior(obs)
-
+        obs = self.model.sample(obs_key)
+        obs = obs.pop(self.observed_name)
+        posterior = self.model.get_true_posterior(obs)
         keys = jr.split(posterior_key, len(posterior))
         latents = {
             name: dist.sample(key, (10000,))

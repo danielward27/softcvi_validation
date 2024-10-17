@@ -22,13 +22,12 @@ with jaxtyping.install_import_hook(
     ["softcvi", "softcvi_validation"],
     "beartype.beartype",
 ):
-    from flowjax.train.variational_fit import fit_to_variational_target
-    from pyrox.program import AbstractProgram, ReparameterizedProgram
-    from softcvi import losses
+    from flowjax.train import fit_to_key_based_loss
+    from pyrox import losses
+    from pyrox.program import AbstractProgram, SetKwargs
 
     from softcvi_validation import metrics, utils
     from softcvi_validation.tasks.available_tasks import get_available_tasks
-
 
 os.chdir(utils.get_abspath_project_root())
 
@@ -48,10 +47,9 @@ def time_wrapper(fn):
 def get_losses(
     n_particles: int,
     negative_distribution: str,
-    obs: dict | None = None,
 ):
     """Get the loss functions under consideration."""
-    loss_choices = {
+    return {
         "SoftCVI(a=0)": losses.SoftContrastiveEstimationLoss(
             n_particles=n_particles,
             alpha=0,
@@ -72,9 +70,6 @@ def get_losses(
             n_particles=n_particles,
         ),
     }
-    if obs is not None:
-        loss_choices = {k: partial(loss, obs=obs) for k, loss in loss_choices.items()}
-    return loss_choices
 
 
 def run_task(
@@ -117,10 +112,9 @@ def run_task(
 
     train_fn = time_wrapper(
         partial(
-            fit_to_variational_target,
+            fit_to_key_based_loss,
             steps=steps,
             show_progress=show_progress,
-            return_best=False,
             optimizer=optimizer,
         ),
     )
@@ -128,7 +122,6 @@ def run_task(
     loss_choices = get_losses(
         n_particles=n_particles,
         negative_distribution=negative_distribution,
-        obs=obs,
     )
 
     key, subkey = jr.split(key)
@@ -138,9 +131,10 @@ def run_task(
         # Returns (((model, guide), losses), runtime)
         ((model, posterior), _), run_time = train_fn(
             subkey,
-            (task.model.reparam(set_val=True), task.guide),
+            (SetKwargs(task.model, obs=obs), task.guide),
             loss_fn=loss,
         )
+        model = model.program  # Undo set kwargs
 
         metrics = compute_metrics(
             key,
@@ -183,8 +177,8 @@ def compute_metrics(
     kwargs = {
         "model": model,
         "guide": guide,
-        "obs": obs,
         "reference_samples": reference_samples,
+        "obs": obs,
     }
 
     return {

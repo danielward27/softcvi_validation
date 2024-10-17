@@ -54,7 +54,7 @@ class EightSchoolsModel(AbstractProgram):
 
     def __call__(
         self,
-        obs: dict[str, Float[Array, " 8"]] | None = None,
+        obs: Float[Array, " 8"] | None = None,
     ):
         mu = sample("mu", Normal(0, 5))
         tau = sample("tau", get_folded_distribution(Cauchy, loc=0, scale=5))
@@ -74,7 +74,7 @@ class EightSchoolsGuide(AbstractProgram):
         self.tau_base = get_folded_distribution(StudentT, df=5)
         self.theta_base = StudentT(df=jnp.full((8,), 5))
 
-    def __call__(self, obs: dict[str, Array] | None = None):
+    def __call__(self):
         sample("mu_base", self.mu_base)
         sample("tau_base", self.tau_base)
         sample("theta_base", self.theta_base)
@@ -100,6 +100,8 @@ class EightSchoolsTask(AbstractTaskWithFileReference):
     guide: EightSchoolsGuide
     name = "eight_schools"
     learning_rate = 1e-3
+    observed_name = "y"
+    latent_names = set({"mu", "tau", "theta"})
 
     def __init__(self, key):
         self.model = ReparameterizedProgram(

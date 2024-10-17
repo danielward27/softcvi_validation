@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-from pyrox.program import AbstractProgram
+from pyrox.program import AbstractProgram, GuideToDataSpace
 
 
 def coverage_probabilities(
@@ -14,7 +14,7 @@ def coverage_probabilities(
     *,
     model: AbstractProgram,
     guide: AbstractProgram,
-    obs: dict,
+    obs: Array,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
     nominal_percentiles: Float[Array, " n"] | None = None,
@@ -42,13 +42,17 @@ def coverage_probabilities(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
-        return model.latents_to_original_space(guide_samp, obs=obs)
+        guide_original_space = GuideToDataSpace(guide, model)
+        return guide_original_space.sample(
+            key,
+            model_kwargs={"obs": obs},
+        )
 
     @eqx.filter_jit
     @_map_wrapper
     def log_prob_original_space(latents):
-        return guide.log_prob_original_space(latents, model=model, obs=obs)
+        guide_original_space = GuideToDataSpace(guide, model)
+        return guide_original_space.log_prob(latents, model_kwargs={"obs": obs})
 
     key, subkey = jr.split(key)
     guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
@@ -74,7 +78,7 @@ def negative_posterior_mean_l2(
     *,
     model: AbstractProgram,
     guide: AbstractProgram,
-    obs: dict,
+    obs: Array,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
 ):
@@ -91,7 +95,7 @@ def negative_posterior_mean_l2(
     @eqx.filter_jit
     @_map_wrapper
     def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
+        guide_samp = guide.sample(key)
         return model.latents_to_original_space(guide_samp, obs=obs)
 
     key, subkey = jr.split(key)
@@ -109,21 +113,22 @@ def negative_posterior_mean_l2(
 def mean_log_prob_reference(
     model: AbstractProgram,
     guide: AbstractProgram,
-    obs: dict[str, Array],
     reference_samples: dict[str, Array],
+    obs: Array,
 ):
     """Calculate the mean log probability of the reference samples, in the guide.
 
     Args:
         model: The model.
         guide: The guide.
-        obs: Dictionary of observations.
+        obs: Array of observations.
         reference_samples: The reference samples, with a leading batch dimension.
     """
+    guide = GuideToDataSpace(guide=guide, model=model)
 
     @_map_wrapper
     def _log_prob(samps):
-        return guide.log_prob_original_space(samps, model=model, obs=obs)
+        return guide.log_prob(samps, model_kwargs={"obs": obs})
 
     return _log_prob(reference_samples).mean()
 

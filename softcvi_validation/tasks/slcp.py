@@ -22,13 +22,9 @@ from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 class SLCPModel(AbstractProgram):
     """The model for the SLCP task."""
 
-    reparameterized: bool | None = None
-    observed_names = frozenset({"x"})
-    reparam_names = frozenset(set())
     interval: int = 3
 
-    def call_without_reparam(self, obs: dict[str, Float[Array, "4 2"]] | None = None):
-        obs = obs["x"] if obs is not None else None
+    def __call__(self, obs: Float[Array, "4 2"] | None = None):
         theta = sample("theta", Uniform(jnp.full((5,), -self.interval), self.interval))
         mu = theta[:2]
         scale1 = theta[2] ** 2
@@ -73,7 +69,7 @@ class SLCPGuide(AbstractProgram):
         )
         self.theta = flow
 
-    def __call__(self, obs: dict[str, Array] | None = None):
+    def __call__(self):
         sample("theta", self.theta)
 
 
@@ -91,6 +87,8 @@ class SLCPTask(AbstractTaskWithFileReference):
     guide: SLCPGuide
     model: SLCPModel
     name = "slcp"
+    observed_name = "x"
+    latent_names = frozenset({"theta"})
     learning_rate = 1e-4
 
     def __init__(self, key: PRNGKeyArray):

@@ -11,5 +11,5 @@ NEGATIVE_DIST=$2
 
 source ~/miniforge3/bin/activate
 sleep 5  # Ensure time to activate
-conda activate softcvi_env
+conda activate pyrox_env
 python -m scripts.run_task --seed=$SLURM_ARRAY_TASK_ID --task-name=$TASK_NAME --negative-distribution=$NEGATIVE_DIST

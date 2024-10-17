@@ -38,7 +38,7 @@ def get_slcp_posterior():
 
     latents, obs = np.stack(latents), np.stack(obs)
     np.savez("reference_posteriors/slcp/latents.npz", theta=latents)
-    np.savez("reference_posteriors/slcp/observations.npz", x=obs)
+    np.save("reference_posteriors/slcp/observations.npy", obs)
 
 
 def get_posteriordb_posterior(name):
@@ -86,17 +86,17 @@ def get_posteriordb_data(name):
 def get_eight_schools_posterior():
     """Get the reference posterior for the eight schools task."""
     latents = get_posteriordb_posterior("eight_schools-eight_schools_noncentered")
-    obs = {"y": get_posteriordb_data("eight_schools")["y"][np.newaxis, ...]}
+    obs = get_posteriordb_data("eight_schools")["y"][np.newaxis, ...]
     np.savez("reference_posteriors/eight_schools/latents.npz", **latents)
-    np.savez("reference_posteriors/eight_schools/observations.npz", **obs)
+    np.save("reference_posteriors/eight_schools/observations.npy", obs)
 
 
 def get_garch_posterior():
     """Get the reference posterior for the garch task."""
     latents = get_posteriordb_posterior("garch-garch11")
-    obs = {"y": get_posteriordb_data("garch")["y"][np.newaxis, ...]}
+    obs = get_posteriordb_data("garch")["y"][np.newaxis, ...]
     np.savez("reference_posteriors/garch/latents.npz", **latents)
-    np.savez("reference_posteriors/garch/observations.npz", **obs)
+    np.save("reference_posteriors/garch/observations.npy", obs)
 
 
 if __name__ == "__main__":

@@ -17,8 +17,8 @@ convenient way to recreate the environment is to clone
 [pyrox](https://github.com/danielward27/pyrox)  and
 ``softcvi_validation`` into your current directory, and run:
 ```
-conda create --name softcvi_env python
-conda activate softcvi_env
+conda create --name pyrox_env python
+conda activate pyrox_env
 pip install -e softcvi
 pip install -e softcvi_validation
 ```

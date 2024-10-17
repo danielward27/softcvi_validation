@@ -7,53 +7,50 @@ import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
-from pyrox.program import AbstractProgram, _check_present
+from pyrox.program import AbstractProgram, _check_present, remove_reparam
 
 from softcvi_validation.utils import get_abspath_project_root
 
 
 class AbstractTask(eqx.Module):
-    """A model, guide and method for generating ground truth samples."""
+    """A model, guide and method for generating ground truth samples.
+
+    The model must accept a key word argument obs, with the array of observations.
+    """
 
     model: eqx.AbstractVar[AbstractProgram]
     guide: eqx.AbstractVar[AbstractProgram]
     name: eqx.AbstractClassVar[str]
     learning_rate: eqx.AbstractVar[float]
+    observed_name: str
+    latent_names: eqx.AbstractVar[frozenset[str]]
 
     @abstractmethod
     def get_latents_and_observed(
         self,
         key: PRNGKeyArray,
-    ) -> tuple[dict[str, Array], dict[str, Array]]:
+    ) -> tuple[dict[str, Array], Array]:
         """Get the observations and parameters.
 
         The parameters are from a reference posterior if available, otherwise, they are
         the ground truth parameters used to generate the observation.
         """
 
-    def get_latents_and_observed_and_validate(self, key: PRNGKeyArray):
-        """Get data and checks matches model trace and model.observed_names."""
+    def get_latents_and_observed_and_validate(self, key: PRNGKeyArray, **kwargs):
+        """Get data and checks matches model trace and is finite."""
         latents, obs = self.get_latents_and_observed(key)
-        self._validate_data(latents, obs)
+        validate = partial(self.model.validate_data, **kwargs)
+        eqx.filter_vmap(validate)(latents)
+        validate({self.observed_name: obs})
 
-        data = {"latents": latents, "observed": obs}
-        for key, dat in data.items():
-            for name, arr in dat.items():
-                dat[name] = eqx.error_if(
-                    x=arr,
-                    pred=~jnp.isfinite(arr),
-                    msg=f"{name} in {key} had non-finite values",
-                )
-        return data["latents"], data["observed"]
-
-    def _validate_data(self, latents: dict[str, Array], obs: dict[str, Array]):
-        """Validate data matches model with a batch dimension in latents."""
-        model = self.model.reparam(set_val=False)
-        model.validate_data(obs, obs=obs)
-        validate_latents_fn = partial(model.validate_data, obs=obs)
-        eqx.filter_vmap(validate_latents_fn)(latents)
-        _check_present(model.observed_names, obs)
-        _check_present(model.latent_names, latents)
+        for name, arr in latents.items():
+            latents[name] = eqx.error_if(
+                x=arr,
+                pred=~jnp.isfinite(arr),
+                msg=f"{name} in {key} had non-finite values",
+            )
+        obs = eqx.error_if(obs, ~jnp.isfinite(obs), "obs had non-finite values.")
+        return latents, obs
 
 
 class AbstractTaskWithFileReference(AbstractTask):
@@ -65,14 +62,12 @@ class AbstractTaskWithFileReference(AbstractTask):
         Note this chooses a random observation from the available observations.
         """
         ref_dir = get_abspath_project_root() / "reference_posteriors" / cls.name
-        obs = jnp.load(f"{ref_dir}/observations.npz")
+        obs = jnp.load(f"{ref_dir}/observations.npy")
         latents = jnp.load(f"{ref_dir}/latents.npz")
-        n_obs = list(obs.values())[0].shape[0]
-        obs_id = jr.randint(key, (), 0, n_obs)
-        latents, obs = (
-            {k: jnp.asarray(v)[obs_id] for k, v in d.items()} for d in (latents, obs)
-        )
-        return latents, obs
+        n_obs = obs.shape[0]
+        obs_id = jr.randint(key, (), minval=0, maxval=n_obs)
+        latents = {k: v[obs_id] for k, v in latents.items()}
+        return latents, obs[obs_id]
 
 
 class AbstractTaskWithoutReference(AbstractTask):
@@ -85,6 +80,7 @@ class AbstractTaskWithoutReference(AbstractTask):
 
     def get_latents_and_observed(self, key: PRNGKeyArray):
         """Generate an observation and ground truth latents from the model."""
-        latents = self.model.reparam(set_val=False).sample_joint(key)
-        obs = {k: latents.pop(k) for k in self.model.observed_names}
+        model = remove_reparam(self.model)
+        latents = model.sample(key)
+        obs = latents.pop(self.observed_name)
         return {k: v[jnp.newaxis, ...] for k, v in latents.items()}, obs
