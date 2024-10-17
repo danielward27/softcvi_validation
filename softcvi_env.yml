@@ -1,4 +1,4 @@
-name: pyrox_env
+name: softcvi_validation_env
 channels:
   - conda-forge
 dependencies:
@@ -67,4 +67,4 @@ dependencies:
       - typing-extensions==4.12.2
       - tzdata==2024.1
       - urllib3==2.2.2
-prefix: /user/home/dw16200/miniforge3/envs/pyrox_env
+prefix: /user/home/dw16200/miniforge3/envs/softcvi_validation_env
