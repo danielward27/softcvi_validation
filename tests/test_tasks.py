@@ -1,7 +1,7 @@
 import jax.random as jr
 import pytest
 from numpyro.util import check_model_guide_match
-from softcvi.numpyro_utils import shape_only_trace
+from pyrox.numpyro_utils import shape_only_trace
 
 from softcvi_validation.tasks.available_tasks import get_available_tasks
 
