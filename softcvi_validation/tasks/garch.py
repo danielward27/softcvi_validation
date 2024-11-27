@@ -13,11 +13,11 @@ from flowjax.distributions import (
     Uniform,
 )
 from flowjax.experimental.numpyro import sample
-from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import constraints
 from numpyro.infer.reparam import TransformReparam
+from paramax.wrappers import non_trainable
 from pyrox.program import AbstractProgram, ReparameterizedProgram
 
 from softcvi_validation.distributions import MLPParameterizedDistribution

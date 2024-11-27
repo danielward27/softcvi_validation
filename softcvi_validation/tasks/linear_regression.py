@@ -10,9 +10,9 @@ from flowjax.distributions import (
     Normal,
 )
 from flowjax.experimental.numpyro import sample
-from flowjax.wrappers import NonTrainable, non_trainable, unwrap
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro import plate
+from paramax.wrappers import NonTrainable, non_trainable, unwrap
 from pyrox.program import AbstractProgram
 
 from softcvi_validation.tasks.tasks import AbstractTask

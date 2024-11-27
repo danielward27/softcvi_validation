@@ -12,8 +12,8 @@ from flowjax.distributions import (
 )
 from flowjax.experimental.numpyro import sample
 from flowjax.flows import masked_autoregressive_flow
-from flowjax.wrappers import NonTrainable, non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
+from paramax.wrappers import NonTrainable, non_trainable
 from pyrox.program import AbstractProgram
 
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference

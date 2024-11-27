@@ -15,10 +15,10 @@ from flowjax.distributions import (
 )
 from flowjax.experimental.numpyro import sample
 from flowjax.utils import arraylike_to_array
-from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
 from numpyro.infer.reparam import TransformReparam
+from paramax.wrappers import NonTrainable
 from pyrox.program import AbstractProgram, ReparameterizedProgram
 
 from softcvi_validation.distributions import Folded

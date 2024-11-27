@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import matplotlib
+
 
 def get_palette():
     """Get the palettes used in the plotting of results."""
@@ -13,6 +15,12 @@ def get_palette():
         "SNIS-fKL": "#845B97",
         "ELBO": "#545454",
     }
+
+
+def darken_color(color):
+    """Darken a color for easier visualisation when plotting (e.g. of text)."""
+    color = matplotlib.colors.ColorConverter.to_rgb(color)
+    return tuple(0.7 * c for c in color)
 
 
 def get_abspath_project_root():
