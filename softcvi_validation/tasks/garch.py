@@ -13,31 +13,26 @@ from flowjax.distributions import (
     Uniform,
 )
 from flowjax.experimental.numpyro import sample
-from flowjax.wrappers import non_trainable
 from jaxtyping import Array, Float, PRNGKeyArray
 from numpyro.contrib.control_flow import scan
 from numpyro.distributions import constraints
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from numpyro.infer.reparam import TransformReparam
+from paramax.wrappers import non_trainable
+from pyrox.program import AbstractProgram, ReparameterizedProgram
 
 from softcvi_validation.distributions import MLPParameterizedDistribution
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
 
 
-class GARCHModel(AbstractReparameterizedModel):
+class GARCHModel(AbstractProgram):
     """The GARCH(1,1) model."""
 
-    reparameterized: bool | None
-    observed_names = {"y"}
-    reparam_names = {"beta1"}
     sigma1: ClassVar[float] = 0.5
     time: ClassVar[int] = 200
 
-    def __init__(self):
-        self.reparameterized = None
-
-    def call_without_reparam(
+    def __call__(
         self,
-        obs: dict[str, Float[Array, " 200"]] | None = None,
+        obs: Float[Array, " 200"] | None = None,
     ):
         mu = sample("mu", ndist.ImproperUniform(constraints.real, (), ()))
         alpha0 = sample("alpha0", ndist.ImproperUniform(constraints.positive, (), ()))
@@ -56,12 +51,11 @@ class GARCHModel(AbstractReparameterizedModel):
 
         step_fn = partial(step_fn)
 
-        y0 = obs["y"][0] if obs is not None else mu
-        xs = None if obs is None else obs["y"]
-        scan(step_fn, init=(jnp.array(self.sigma1), y0), xs=xs, length=self.time)
+        y0 = obs[0] if obs is not None else mu
+        scan(step_fn, init=(jnp.array(self.sigma1), y0), xs=obs, length=self.time)
 
 
-class GARCHGuide(AbstractGuide):
+class GARCHGuide(AbstractProgram):
     """The guide used for the GARCH task.
 
     The guide uses a combination of simple distributions (for mu and alpha0), in
@@ -96,7 +90,7 @@ class GARCHGuide(AbstractGuide):
             final_activation=lambda x: x / 5,  # At initialization prefer smaller vals
         )
 
-    def __call__(self, obs: dict[str, Array] | None = None):
+    def __call__(self):
         sample("mu", self.mu)
         alpha0 = sample("alpha0", self.alpha0)
         alpha1 = sample("alpha1", self.alpha1)
@@ -110,11 +104,16 @@ class GARCHTask(AbstractTaskWithFileReference):
     https://doi.org/10.1016/0304-4076(86)90063-1.
     """
 
-    model: GARCHModel
+    model: ReparameterizedProgram
     guide: GARCHGuide
     name = "garch"
     learning_rate = 5e-4
+    observed_name = "y"
+    latent_names = frozenset({"mu", "alpha0", "alpha1", "beta1"})
 
     def __init__(self, key: PRNGKeyArray):
-        self.model = GARCHModel()
+        self.model = ReparameterizedProgram(
+            GARCHModel(),
+            config={"beta1": TransformReparam()},
+        )
         self.guide = GARCHGuide(key)

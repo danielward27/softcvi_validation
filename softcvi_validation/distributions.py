@@ -12,13 +12,14 @@ from flowjax.distributions import (
     AbstractTransformed,
     Logistic,
 )
-from flowjax.utils import arraylike_to_array, inv_softplus
-from flowjax.wrappers import AbstractUnwrappable, NonTrainable, Parameterize, unwrap
+from flowjax.utils import arraylike_to_array
 from jax.flatten_util import ravel_pytree
 from jax.nn import softplus
 from jax.scipy.special import logsumexp
 from jax.scipy.stats import truncnorm
 from jaxtyping import Array, ArrayLike, PRNGKeyArray
+from paramax.utils import inv_softplus
+from paramax.wrappers import AbstractUnwrappable, NonTrainable, Parameterize, unwrap
 
 
 class TruncNormal(AbstractDistribution):

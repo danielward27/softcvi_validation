@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "Daniel Ward", email = "danielward27@outlook.com" }]
 dependencies = [
-    "flowjax>=14.0",
+    "flowjax==17.0.2",
     "equinox",
     "tqdm",
     "optax",
@@ -11,8 +11,9 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "pandas",
+    "paramax",
 ]
-description = "Experiments for softcvi package."
+description = "Experiments for softcvi method."
 name = "softcvi_validation"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,7 +25,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-addopts = "--jaxtyping-packages=softcvi,softcvi_validation,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
+addopts = "--jaxtyping-packages=pyrox,softcvi_validation,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
 
 [tool.ruff]
 include = ["*.py", "*.pyi", "**/pyproject.toml", "*.ipynb"]

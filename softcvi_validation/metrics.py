@@ -6,15 +6,19 @@ import jax.numpy as jnp
 import jax.random as jr
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from pyrox.program import (
+    AbstractProgram,
+    GuideToDataSpace,
+    ReparameterizedProgram,
+)
 
 
 def coverage_probabilities(
     key: PRNGKeyArray,
     *,
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
-    obs: dict,
+    model: AbstractProgram,
+    guide: AbstractProgram,
+    obs: Array,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
     nominal_percentiles: Float[Array, " n"] | None = None,
@@ -36,24 +40,26 @@ def coverage_probabilities(
         nominal_percentiles: The nominal percentiles of the credible region to consider.
             Defaults to ``jnp.linspace(0, 100, 100)``.
     """
+    if isinstance(model, ReparameterizedProgram):
+        guide = GuideToDataSpace(guide=guide, model=model, model_kwargs={"obs": obs})
+
     if nominal_percentiles is None:
         nominal_percentiles = jnp.linspace(0, 100, 100)
 
     @eqx.filter_jit
     @_map_wrapper
-    def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
-        return model.latents_to_original_space(guide_samp, obs=obs)
+    def sample_guide(key):
+        return guide.sample(key)
 
     @eqx.filter_jit
     @_map_wrapper
-    def log_prob_original_space(latents):
-        return guide.log_prob_original_space(latents, model=model, obs=obs)
+    def log_prob_guide(latents):
+        return guide.log_prob(latents)
 
     key, subkey = jr.split(key)
-    guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
-    guide_log_probs = jnp.sort(log_prob_original_space(guide_samples))
-    ref_log_probs = log_prob_original_space(reference_samples)
+    guide_samples = sample_guide(jr.split(subkey, n_samps))
+    guide_log_probs = jnp.sort(log_prob_guide(guide_samples))
+    ref_log_probs = log_prob_guide(reference_samples)
 
     # Compute percentile of reference log probs, within guide_log_probs
     percentile = (
@@ -72,9 +78,9 @@ def coverage_probabilities(
 def negative_posterior_mean_l2(
     key: PRNGKeyArray,
     *,
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
-    obs: dict,
+    model: AbstractProgram,
+    guide: AbstractProgram,
+    obs: Array,
     reference_samples: dict[str, Array],
     n_samps: int = 5000,
 ):
@@ -83,6 +89,8 @@ def negative_posterior_mean_l2(
     This is the negative l2-norm of the difference between the means of the approximate
     and reference samples, after scaling by the scale of the reference samples.
     """
+    if isinstance(model, ReparameterizedProgram):
+        guide = GuideToDataSpace(guide=guide, model=model, model_kwargs={"obs": obs})
 
     @eqx.filter_vmap
     def _to_matrix(samples: dict):
@@ -90,12 +98,11 @@ def negative_posterior_mean_l2(
 
     @eqx.filter_jit
     @_map_wrapper
-    def sample_guide_original_space(key):
-        guide_samp = guide.sample(key, obs=obs)
-        return model.latents_to_original_space(guide_samp, obs=obs)
+    def sample_guide(key):
+        return guide.sample(key)
 
     key, subkey = jr.split(key)
-    guide_samples = sample_guide_original_space(jr.split(subkey, n_samps))
+    guide_samples = sample_guide(jr.split(subkey, n_samps))
     guide_samples = _to_matrix(guide_samples)
     reference_samples = _to_matrix(reference_samples)
 
@@ -107,23 +114,25 @@ def negative_posterior_mean_l2(
 
 
 def mean_log_prob_reference(
-    model: AbstractReparameterizedModel,
-    guide: AbstractGuide,
-    obs: dict[str, Array],
+    model: AbstractProgram,
+    guide: AbstractProgram,
     reference_samples: dict[str, Array],
+    obs: Array,
 ):
     """Calculate the mean log probability of the reference samples, in the guide.
 
     Args:
         model: The model.
         guide: The guide.
-        obs: Dictionary of observations.
+        obs: Array of observations.
         reference_samples: The reference samples, with a leading batch dimension.
     """
+    if isinstance(model, ReparameterizedProgram):
+        guide = GuideToDataSpace(guide=guide, model=model, model_kwargs={"obs": obs})
 
     @_map_wrapper
     def _log_prob(samps):
-        return guide.log_prob_original_space(samps, model=model, obs=obs)
+        return guide.log_prob(samps)
 
     return _log_prob(reference_samples).mean()
 

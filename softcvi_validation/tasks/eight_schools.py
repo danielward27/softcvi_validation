@@ -15,10 +15,11 @@ from flowjax.distributions import (
 )
 from flowjax.experimental.numpyro import sample
 from flowjax.utils import arraylike_to_array
-from flowjax.wrappers import NonTrainable
 from jax import Array
 from jaxtyping import Float, ScalarLike
-from softcvi.models import AbstractGuide, AbstractReparameterizedModel
+from numpyro.infer.reparam import TransformReparam
+from paramax.wrappers import NonTrainable
+from pyrox.program import AbstractProgram, ReparameterizedProgram
 
 from softcvi_validation.distributions import Folded
 from softcvi_validation.tasks.tasks import AbstractTaskWithFileReference
@@ -45,27 +46,23 @@ def get_folded_distribution(
     return Transformed(Folded(dist), Scale(scale))
 
 
-class EightSchoolsModel(AbstractReparameterizedModel):
+class EightSchoolsModel(AbstractProgram):
     """Eight schools model."""
 
-    reparameterized: bool | None = None
-    observed_names = {"y"}
-    reparam_names = {"mu", "theta", "tau"}
     num_schools: ClassVar[int] = 8
     sigma: ClassVar[Array] = jnp.array([15, 10, 16, 11, 9, 11, 10, 18])
 
-    def call_without_reparam(
+    def __call__(
         self,
-        obs: dict[str, Float[Array, " 8"]] | None = None,
+        obs: Float[Array, " 8"] | None = None,
     ):
-        obs = obs["y"] if obs is not None else None
         mu = sample("mu", Normal(0, 5))
         tau = sample("tau", get_folded_distribution(Cauchy, loc=0, scale=5))
         theta = sample("theta", Normal(jnp.full((8,), mu), tau))
         sample("y", Normal(theta, self.sigma), obs=obs)
 
 
-class EightSchoolsGuide(AbstractGuide):
+class EightSchoolsGuide(AbstractProgram):
     """Eight schools guide."""
 
     theta_base: AbstractDistribution
@@ -77,7 +74,7 @@ class EightSchoolsGuide(AbstractGuide):
         self.tau_base = get_folded_distribution(StudentT, df=5)
         self.theta_base = StudentT(df=jnp.full((8,), 5))
 
-    def __call__(self, obs: dict[str, Array] | None = None):
+    def __call__(self):
         sample("mu_base", self.mu_base)
         sample("tau_base", self.tau_base)
         sample("theta_base", self.theta_base)
@@ -99,11 +96,16 @@ class EightSchoolsTask(AbstractTaskWithFileReference):
         key: Ignored, but provided for consistency of API.
     """
 
-    model: EightSchoolsModel
+    model: ReparameterizedProgram
     guide: EightSchoolsGuide
     name = "eight_schools"
     learning_rate = 1e-3
+    observed_name = "y"
+    latent_names = set({"mu", "tau", "theta"})
 
     def __init__(self, key):
-        self.model = EightSchoolsModel()
+        self.model = ReparameterizedProgram(
+            EightSchoolsModel(),
+            config={param: TransformReparam() for param in ("mu", "theta", "tau")},
+        )
         self.guide = EightSchoolsGuide()
