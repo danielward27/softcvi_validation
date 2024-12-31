@@ -1,7 +1,7 @@
 
 ## Validation experiments for SoftCVI
 
-Experiments for validating performance of the Soft Contrastive Variational Inference (SoftCVI):
+Experiments for validating performance of Soft Contrastive Variational Inference (SoftCVI):
 
 - For a description of the method, see the [arxiv paper](https://arxiv.org/pdf/2407.15687).
 - The implementation is in [pyrox](https://github.com/danielward27/pyrox).
