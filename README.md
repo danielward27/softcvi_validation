@@ -1,9 +1,10 @@
 
 ## Validation experiments for SoftCVI
 
-Experiments for validating performance of the Soft contrastive variational inference, as implemented in [pyrox](https://github.com/danielward27/pyrox).
+Experiments for validating performance of the Soft Contrastive Variational Inference (SoftCVI):
 
 - For a description of the method, see the [arxiv paper](https://arxiv.org/pdf/2407.15687).
+- The implementation is in [pyrox](https://github.com/danielward27/pyrox).
 - We use HPC for running the experiments, see [jobs](jobs/).
 - Single runs can be performed using [scripts/run_task.py](scripts/run_task.py), for example by running:
 ```python
